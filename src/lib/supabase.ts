@@ -1,10 +1,14 @@
 import { createClient } from '@supabase/supabase-js';
 
+// Credenciales desde variables de entorno (.env)
+// Nunca hardcodear keys en el código fuente
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// Initialize database client
-const supabaseUrl = 'https://olasjxzgnuzedhlaluwu.databasepad.com';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjM4OWQxZTA3LWM1ODUtNDhhNy1hMmQ5LTkwZWMzNTdmZTYwYiJ9.eyJwcm9qZWN0SWQiOiJvbGFzanh6Z251emVkaGxhbHV3dSIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzcyMDg4NTg4LCJleHAiOjIwODc0NDg1ODgsImlzcyI6ImZhbW91cy5kYXRhYmFzZXBhZCIsImF1ZCI6ImZhbW91cy5jbGllbnRzIn0.2ACcqjD9C9jQEbOzETU5yW5icQ-QaK1axUw2F7oPOJU';
+if (!supabaseUrl || !supabaseKey) {
+  throw new Error('Faltan variables de entorno: VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY. Copia .env.example como .env y completa los valores.');
+}
+
 const supabase = createClient(supabaseUrl, supabaseKey);
-
 
 export { supabase };
