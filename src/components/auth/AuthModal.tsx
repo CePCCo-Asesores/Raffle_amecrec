@@ -34,7 +34,10 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, defaultTab = 'lo
     setLoading(true);
     const success = await signIn(loginEmail, loginPassword);
     setLoading(false);
-    if (success) onClose();
+    if (success) {
+  onClose();
+  setTimeout(() => window.location.reload(), 300);
+}
   };
 
   const handleRegister = async (e: React.FormEvent) => {
