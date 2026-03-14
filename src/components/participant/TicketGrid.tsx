@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { Raffle, Ticket, RAFFLE_VALIDATION_RULES } from '@/lib/types';
@@ -6,6 +6,7 @@ import { atomicTicketPurchase, reserveTickets, releaseTickets } from '@/lib/data
 import { createCheckoutSession, handlePaymentReturn, verifyPayment } from '@/lib/stripe';
 import { sendTicketPurchaseNotification } from '@/lib/notifications';
 import { rateLimiter } from '@/lib/rate-limiter';
+import { formatTicketNumber } from '@/lib/utils';
 import {
   ArrowLeft, Trophy, Calendar, DollarSign, Hash, Clock,
   CreditCard, Users, CheckCircle2, AlertCircle, ShoppingCart,
@@ -445,9 +446,12 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
+  const fmtTk = (n: number) => formatTicketNumber(n, raffle.total_tickets);
+
   const filteredTickets = searchNumber
-    ? tickets.filter(t => t.ticket_number.toString().includes(searchNumber))
+    ? tickets.filter(t => fmtTk(t.ticket_number).includes(searchNumber) || t.ticket_number.toString().includes(searchNumber))
     : tickets;
+
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -621,7 +625,8 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
           </div>
         ) : (
           <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 xl:grid-cols-15 gap-2">
+            <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 xl:grid-cols-12 gap-2">
+
               {filteredTickets.map(ticket => (
                 <button
                   key={ticket.id}
