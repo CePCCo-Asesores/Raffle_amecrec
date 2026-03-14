@@ -120,6 +120,8 @@ export interface Ticket {
   participant_id?: string;
   status: TicketStatus;
   reserved_at?: string;
+  reserved_by?: string;
+  reserved_until?: string;
   purchased_at?: string;
   payment_method?: string;
   stripe_payment_id?: string;
@@ -131,6 +133,7 @@ export interface Ticket {
   commission_rate?: number;
   commission_amount?: number;
 }
+
 
 export interface Notification {
   id: string;
@@ -453,3 +456,4 @@ export const RAFFLE_VALIDATION_RULES = {
   // Max tickets per minute per user
   maxTicketsPerMinute: 20,
 };
+
