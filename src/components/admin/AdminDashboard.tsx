@@ -14,6 +14,17 @@ import {
 } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 
+interface PlatformMetrics {
+  totalOrganizers: number;
+  activeOrganizers: number;
+  totalRaffles: number;
+  activeRaffles: number;
+  totalTicketsSold: number;
+  totalRevenue: number;
+  totalCommissions: number;
+  totalParticipants: number;
+}
+
 const AdminDashboard: React.FC = () => {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'overview' | 'organizers' | 'disputes' | 'plans' | 'config' | 'audit' | 'ledger'>('overview');
@@ -25,6 +36,16 @@ const AdminDashboard: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [commissionRate, setCommissionRate] = useState('5');
+  const [platformMetrics, setPlatformMetrics] = useState<PlatformMetrics>({
+    totalOrganizers: 0,
+    activeOrganizers: 0,
+    totalRaffles: 0,
+    activeRaffles: 0,
+    totalTicketsSold: 0,
+    totalRevenue: 0,
+    totalCommissions: 0,
+    totalParticipants: 0,
+  });
 
   // Dispute state
   const [disputes, setDisputes] = useState<Dispute[]>([]);
@@ -47,15 +68,6 @@ const AdminDashboard: React.FC = () => {
   const [forceRefundNotes, setForceRefundNotes] = useState('');
   const [processingForceRefund, setProcessingForceRefund] = useState(false);
 
-  const metrics = [
-    { label: 'Organizadores Activos', value: '127', change: '+12%', icon: <Users className="w-5 h-5" />, color: 'from-blue-500 to-blue-600' },
-    { label: 'Sorteos Activos', value: '342', change: '+8%', icon: <Ticket className="w-5 h-5" />, color: 'from-emerald-500 to-emerald-600' },
-    { label: 'Boletos Vendidos', value: '45,892', change: '+23%', icon: <BarChart3 className="w-5 h-5" />, color: 'from-purple-500 to-purple-600' },
-    { label: 'Disputas Abiertas', value: (disputeStats.open + disputeStats.under_review).toString(), change: disputeStats.open > 0 ? 'Requiere atención' : 'Sin pendientes', icon: <Scale className="w-5 h-5" />, color: disputeStats.open > 0 ? 'from-red-500 to-red-600' : 'from-gray-400 to-gray-500' },
-    { label: 'Ingresos Comisiones', value: '$34,521', change: '+31%', icon: <TrendingUp className="w-5 h-5" />, color: 'from-pink-500 to-pink-600' },
-    { label: 'Tasa de Retención', value: '94.2%', change: '+2.1%', icon: <Activity className="w-5 h-5" />, color: 'from-cyan-500 to-cyan-600' },
-  ];
-
   useEffect(() => {
     loadData();
   }, []);
@@ -63,6 +75,50 @@ const AdminDashboard: React.FC = () => {
   useEffect(() => {
     if (activeTab === 'disputes') loadDisputeData();
   }, [activeTab]);
+
+  const loadPlatformMetrics = async () => {
+    try {
+      const [
+        organizersRes,
+        activeOrgsRes,
+        rafflesRes,
+        activeRafflesRes,
+        ticketsSoldRes,
+        participantsRes,
+        ledgerRes,
+      ] = await Promise.all([
+        supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'organizer'),
+        supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'organizer').eq('is_active', true),
+        supabase.from('raffles').select('id', { count: 'exact', head: true }),
+        supabase.from('raffles').select('id', { count: 'exact', head: true }).eq('status', 'active'),
+        supabase.from('tickets').select('id', { count: 'exact', head: true }).eq('status', 'sold'),
+        supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'participant'),
+        supabase.from('financial_ledger').select('amount, entry_type'),
+      ]);
+
+      let totalRevenue = 0;
+      let totalCommissions = 0;
+      if (ledgerRes.data) {
+        for (const entry of ledgerRes.data) {
+          if (entry.entry_type === 'ticket_sale') totalRevenue += entry.amount || 0;
+          if (entry.entry_type === 'platform_commission') totalCommissions += entry.amount || 0;
+        }
+      }
+
+      setPlatformMetrics({
+        totalOrganizers: organizersRes.count || 0,
+        activeOrganizers: activeOrgsRes.count || 0,
+        totalRaffles: rafflesRes.count || 0,
+        activeRaffles: activeRafflesRes.count || 0,
+        totalTicketsSold: ticketsSoldRes.count || 0,
+        totalRevenue,
+        totalCommissions,
+        totalParticipants: participantsRes.count || 0,
+      });
+    } catch (err) {
+      console.error('Error loading platform metrics:', err);
+    }
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -83,9 +139,9 @@ const AdminDashboard: React.FC = () => {
       setAuditLogs(logs);
       const entries = await fetchLedgerEntries({ limit: 100 });
       setLedgerEntries(entries);
-      // Load dispute stats
       const stats = await getDisputeStats();
       setDisputeStats(stats);
+      await loadPlatformMetrics();
     } catch (err) {
       console.error('Error loading admin data:', err);
     }
@@ -145,7 +201,6 @@ const AdminDashboard: React.FC = () => {
       setShowStatusModal(false);
       setNewStatus('');
       setStatusNotes('');
-      // Refresh
       const detail = await getDisputeDetail(selectedDispute.id);
       if (detail.dispute) setSelectedDispute(detail.dispute);
       setDisputeMessages(detail.messages);
@@ -172,7 +227,6 @@ const AdminDashboard: React.FC = () => {
       setShowForceRefundModal(false);
       setForceRefundDecision('');
       setForceRefundNotes('');
-      // Refresh
       const detail = await getDisputeDetail(selectedDispute.id);
       if (detail.dispute) setSelectedDispute(detail.dispute);
       setDisputeMessages(detail.messages);
@@ -272,6 +326,13 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
+  const fmtMXN = (n: number) =>
+    n >= 1000000
+      ? `$${(n / 1000000).toFixed(1)}M`
+      : n >= 1000
+      ? `$${(n / 1000).toFixed(1)}K`
+      : `$${n.toLocaleString('es-MX')}`;
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -299,21 +360,93 @@ const AdminDashboard: React.FC = () => {
           ))}
         </div>
 
-        {/* Overview Tab */}
+        {/* ============================================================ */}
+        {/* OVERVIEW TAB */}
+        {/* ============================================================ */}
         {activeTab === 'overview' && (
           <div className="space-y-8">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {metrics.map((m, i) => (
-                <div key={i} className="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md transition-shadow">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className={`w-10 h-10 bg-gradient-to-br ${m.color} rounded-xl flex items-center justify-center text-white`}>{m.icon}</div>
-                    <span className="text-emerald-600 text-sm font-medium bg-emerald-50 px-2 py-0.5 rounded-full">{m.change}</span>
+
+            {loading ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className="bg-white rounded-xl border border-gray-200 p-5 animate-pulse">
+                    <div className="h-10 w-10 bg-gray-200 rounded-xl mb-3" />
+                    <div className="h-7 w-24 bg-gray-200 rounded mb-1" />
+                    <div className="h-4 w-32 bg-gray-100 rounded" />
                   </div>
-                  <div className="text-2xl font-bold text-gray-900">{m.value}</div>
-                  <div className="text-sm text-gray-500 mt-0.5">{m.label}</div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {[
+                  {
+                    label: 'Organizadores',
+                    value: platformMetrics.totalOrganizers.toString(),
+                    sub: `${platformMetrics.activeOrganizers} activos`,
+                    icon: <Users className="w-5 h-5" />,
+                    color: 'from-blue-500 to-blue-600',
+                  },
+                  {
+                    label: 'Participantes',
+                    value: platformMetrics.totalParticipants.toLocaleString('es-MX'),
+                    sub: 'registrados',
+                    icon: <UserCheck className="w-5 h-5" />,
+                    color: 'from-indigo-500 to-indigo-600',
+                  },
+                  {
+                    label: 'Sorteos Activos',
+                    value: platformMetrics.activeRaffles.toString(),
+                    sub: `${platformMetrics.totalRaffles} en total`,
+                    icon: <Ticket className="w-5 h-5" />,
+                    color: 'from-emerald-500 to-emerald-600',
+                  },
+                  {
+                    label: 'Boletos Vendidos',
+                    value: platformMetrics.totalTicketsSold.toLocaleString('es-MX'),
+                    sub: 'confirmados',
+                    icon: <BarChart3 className="w-5 h-5" />,
+                    color: 'from-purple-500 to-purple-600',
+                  },
+                  {
+                    label: 'Ingresos Totales',
+                    value: fmtMXN(platformMetrics.totalRevenue),
+                    sub: 'MXN en boletos',
+                    icon: <TrendingUp className="w-5 h-5" />,
+                    color: 'from-pink-500 to-pink-600',
+                  },
+                  {
+                    label: 'Comisiones',
+                    value: fmtMXN(platformMetrics.totalCommissions),
+                    sub: 'MXN plataforma',
+                    icon: <DollarSign className="w-5 h-5" />,
+                    color: 'from-amber-500 to-amber-600',
+                  },
+                  {
+                    label: 'Disputas Abiertas',
+                    value: (disputeStats.open + disputeStats.under_review).toString(),
+                    sub: disputeStats.open > 0 ? 'Requieren atención' : 'Sin pendientes',
+                    icon: <Scale className="w-5 h-5" />,
+                    color: disputeStats.open > 0 ? 'from-red-500 to-red-600' : 'from-gray-400 to-gray-500',
+                  },
+                  {
+                    label: 'Disputas Totales',
+                    value: disputeStats.total.toString(),
+                    sub: `${disputeStats.resolved_participant + disputeStats.resolved_organizer} resueltas`,
+                    icon: <Activity className="w-5 h-5" />,
+                    color: 'from-cyan-500 to-cyan-600',
+                  },
+                ].map((m, i) => (
+                  <div key={i} className="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md transition-shadow">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className={`w-10 h-10 bg-gradient-to-br ${m.color} rounded-xl flex items-center justify-center text-white`}>{m.icon}</div>
+                    </div>
+                    <div className="text-2xl font-bold text-gray-900">{m.value}</div>
+                    <div className="text-sm text-gray-500 mt-0.5">{m.label}</div>
+                    <div className="text-xs text-gray-400 mt-0.5">{m.sub}</div>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* Dispute Alert */}
             {(disputeStats.open + disputeStats.under_review) > 0 && (
@@ -365,6 +498,12 @@ const AdminDashboard: React.FC = () => {
                 ))}
               </div>
             </div>
+
+            <div className="flex justify-end">
+              <button onClick={loadData} disabled={loading} className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Actualizar métricas
+              </button>
+            </div>
           </div>
         )}
 
@@ -373,7 +512,6 @@ const AdminDashboard: React.FC = () => {
         {/* ============================================================ */}
         {activeTab === 'disputes' && (
           <div>
-            {/* Stats */}
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-6">
               {[
                 { label: 'Abiertas', value: disputeStats.open, color: 'text-red-600', bg: 'bg-red-100', icon: <AlertCircle className="w-4 h-4 text-red-600" /> },
@@ -392,7 +530,6 @@ const AdminDashboard: React.FC = () => {
               ))}
             </div>
 
-            {/* Filter */}
             <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
               {['all', 'open', 'under_review', 'resolved_participant', 'resolved_organizer', 'closed'].map(s => (
                 <button
@@ -413,7 +550,6 @@ const AdminDashboard: React.FC = () => {
               </button>
             </div>
 
-            {/* Disputes List */}
             {disputesLoading ? (
               <div className="text-center py-12 text-gray-500"><Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />Cargando disputas...</div>
             ) : filteredDisputes.length === 0 ? (
@@ -464,9 +600,6 @@ const AdminDashboard: React.FC = () => {
                           <div><span className="text-gray-400">Asignado:</span> {dispute.assigned_admin_name || 'Sin asignar'}</div>
                         </div>
                         <p className="text-xs text-gray-500 line-clamp-2 mb-1">{dispute.reason}</p>
-                        {dispute.refund_reason && (
-                          <p className="text-[10px] text-gray-400">Motivo reembolso original: {dispute.refund_reason}</p>
-                        )}
                         <p className="text-[10px] text-gray-400 mt-1">
                           Creada: {new Date(dispute.created_at).toLocaleString('es-MX')}
                           {dispute.resolved_at && ` — Resuelta: ${new Date(dispute.resolved_at).toLocaleString('es-MX')}`}
@@ -680,7 +813,6 @@ const AdminDashboard: React.FC = () => {
       {showDisputeDetail && selectedDispute && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowDisputeDetail(false)}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
-            {/* Header */}
             <div className="flex items-start justify-between p-5 border-b border-gray-200 flex-shrink-0">
               <div className="flex-1">
                 <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
@@ -698,7 +830,6 @@ const AdminDashboard: React.FC = () => {
               <button onClick={() => setShowDisputeDetail(false)} className="p-1 hover:bg-gray-100 rounded-lg"><X className="w-5 h-5 text-gray-500" /></button>
             </div>
 
-            {/* Info Cards */}
             <div className="p-5 border-b border-gray-200 flex-shrink-0">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
                 <div className="bg-blue-50 rounded-lg p-3">
@@ -721,7 +852,6 @@ const AdminDashboard: React.FC = () => {
                 </div>
               </div>
 
-              {/* Admin Actions */}
               {!['resolved_participant', 'resolved_organizer', 'closed'].includes(selectedDispute.status) && (
                 <div className="flex flex-wrap gap-2 mt-4">
                   <button onClick={() => { setShowStatusModal(true); setNewStatus('under_review'); setStatusNotes(''); }}
@@ -744,7 +874,6 @@ const AdminDashboard: React.FC = () => {
               )}
             </div>
 
-            {/* Timeline */}
             <div className="flex-1 overflow-y-auto p-5">
               <h4 className="text-sm font-bold text-gray-700 mb-3">Línea de tiempo</h4>
               {detailLoading ? (
@@ -774,7 +903,6 @@ const AdminDashboard: React.FC = () => {
               )}
             </div>
 
-            {/* Message input */}
             {!['resolved_participant', 'resolved_organizer', 'closed'].includes(selectedDispute.status) && (
               <div className="p-4 border-t border-gray-200 flex-shrink-0">
                 <div className="flex items-center gap-2 mb-2">
@@ -787,7 +915,7 @@ const AdminDashboard: React.FC = () => {
                 <div className="flex gap-2">
                   <input type="text" value={newMessage} onChange={e => setNewMessage(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
-                    placeholder={isInternalMessage ? "Nota interna (no visible para participante/organizador)..." : "Escribe un mensaje..."}
+                    placeholder={isInternalMessage ? "Nota interna..." : "Escribe un mensaje..."}
                     className={`flex-1 px-4 py-2.5 border rounded-lg text-sm focus:ring-2 focus:border-transparent ${
                       isInternalMessage ? 'border-red-300 focus:ring-red-500 bg-red-50' : 'border-gray-300 focus:ring-blue-500'
                     }`} />
@@ -799,7 +927,6 @@ const AdminDashboard: React.FC = () => {
               </div>
             )}
 
-            {/* Resolution banner */}
             {selectedDispute.resolution_summary && (
               <div className="p-4 border-t border-gray-200 bg-emerald-50 flex-shrink-0">
                 <div className="flex items-start gap-2">
@@ -815,9 +942,7 @@ const AdminDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* ============================================================ */}
       {/* STATUS CHANGE MODAL */}
-      {/* ============================================================ */}
       {showStatusModal && selectedDispute && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowStatusModal(false)}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
@@ -825,7 +950,6 @@ const AdminDashboard: React.FC = () => {
               <h3 className="text-lg font-bold text-gray-900">Cambiar Estado de Disputa</h3>
               <button onClick={() => setShowStatusModal(false)} className="p-1 hover:bg-gray-100 rounded-lg"><X className="w-5 h-5 text-gray-500" /></button>
             </div>
-
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-1.5">Nuevo estado</label>
               <select value={newStatus} onChange={e => setNewStatus(e.target.value)}
@@ -837,20 +961,17 @@ const AdminDashboard: React.FC = () => {
                 <option value="closed">Cerrada</option>
               </select>
             </div>
-
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-1.5">Notas del administrador</label>
               <textarea value={statusNotes} onChange={e => setStatusNotes(e.target.value)} placeholder="Explica la razón del cambio de estado..."
                 rows={3} className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none" />
             </div>
-
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
               <div className="flex items-start gap-2">
                 <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-                <p className="text-xs text-amber-800">El cambio de estado se notificará por correo al participante y al organizador. Se registrará en el log de auditoría.</p>
+                <p className="text-xs text-amber-800">El cambio de estado se notificará al participante y al organizador. Se registrará en auditoría.</p>
               </div>
             </div>
-
             <div className="flex gap-3">
               <button onClick={() => setShowStatusModal(false)} disabled={updatingStatus} className="flex-1 py-2.5 border border-gray-300 rounded-lg font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">Cancelar</button>
               <button onClick={handleUpdateStatus} disabled={updatingStatus || !newStatus}
@@ -862,9 +983,7 @@ const AdminDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* ============================================================ */}
       {/* FORCE REFUND MODAL */}
-      {/* ============================================================ */}
       {showForceRefundModal && selectedDispute && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowForceRefundModal(false)}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
@@ -874,47 +993,41 @@ const AdminDashboard: React.FC = () => {
               </h3>
               <button onClick={() => setShowForceRefundModal(false)} className="p-1 hover:bg-gray-100 rounded-lg"><X className="w-5 h-5 text-gray-500" /></button>
             </div>
-
             <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4">
               <h4 className="text-sm font-bold text-red-800 mb-2">Acción administrativa</h4>
               <div className="text-xs text-red-700 space-y-1">
-                <p>Esta acción anulará la decisión del organizador y forzará un reembolso de <strong>${selectedDispute.amount} {selectedDispute.currency}</strong> al participante.</p>
+                <p>Esta acción forzará un reembolso de <strong>${selectedDispute.amount} {selectedDispute.currency}</strong> al participante.</p>
                 <p>Boleto #{selectedDispute.ticket_number} — {selectedDispute.raffle_name}</p>
                 <p>Participante: {selectedDispute.participant_name}</p>
-                <p>Organizador: {selectedDispute.organizer_name}</p>
               </div>
             </div>
-
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-1.5">Decisión administrativa <span className="text-red-500">*</span></label>
               <textarea value={forceRefundDecision} onChange={e => setForceRefundDecision(e.target.value)}
                 placeholder="Explica la razón por la cual se fuerza el reembolso..."
                 rows={3} className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none" />
             </div>
-
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-1.5">Notas adicionales (opcional)</label>
               <textarea value={forceRefundNotes} onChange={e => setForceRefundNotes(e.target.value)}
-                placeholder="Notas internas adicionales..."
+                placeholder="Notas internas..."
                 rows={2} className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none" />
             </div>
-
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
               <div className="flex items-start gap-2">
                 <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
                 <div className="text-xs text-amber-800">
                   <strong>Consecuencias:</strong>
                   <ul className="mt-1 space-y-0.5 list-disc list-inside">
-                    <li>Se procesará el reembolso de ${selectedDispute.amount} {selectedDispute.currency}</li>
-                    <li>El boleto será liberado y disponible para venta</li>
-                    <li>Se crearán entradas en el ledger financiero</li>
-                    <li>Se notificará a ambas partes por correo</li>
-                    <li>La acción quedará registrada en auditoría</li>
+                    <li>Reembolso de ${selectedDispute.amount} {selectedDispute.currency}</li>
+                    <li>Boleto liberado para venta</li>
+                    <li>Entradas en ledger financiero</li>
+                    <li>Notificación a ambas partes</li>
+                    <li>Registro en auditoría</li>
                   </ul>
                 </div>
               </div>
             </div>
-
             <div className="flex gap-3">
               <button onClick={() => setShowForceRefundModal(false)} disabled={processingForceRefund} className="flex-1 py-2.5 border border-gray-300 rounded-lg font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">Cancelar</button>
               <button onClick={handleForceRefund} disabled={processingForceRefund || !forceRefundDecision.trim()}
