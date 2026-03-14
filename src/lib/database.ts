@@ -1,10 +1,12 @@
 import { supabase } from './supabase';
 import { rateLimiter } from './rate-limiter';
+import { formatTicketNumber } from './utils';
 import {
   Raffle, Ticket, RaffleStatus, RAFFLE_STATUS_TRANSITIONS,
   RAFFLE_VALIDATION_RULES, AuditLog, FinancialLedger,
   RaffleResultsLog, Profile, Transaction
 } from './types';
+
 
 // ============================================================
 // AUDIT LOGGING
@@ -569,11 +571,12 @@ export async function finalizeDrawAtomic(params: {
         'RAFFLE_NOT_FOUND': 'Rifa no encontrada.',
         'INVALID_STATUS': `La rifa debe estar en estado "Bloqueada". Estado actual: ${res?.current_status || ''}`,
         'WINNER_ALREADY_DECLARED': 'Esta rifa ya tiene un ganador declarado. El resultado es inmutable.',
-        'INVALID_NUMBER': `El numero debe estar entre 1 y ${res?.max || '?'}`,
+        'INVALID_NUMBER': `El número debe estar entre 0 y ${res?.max ?? '?'} (numeración desde cero)`,
       };
       return { success: false, error: messages[errCode] || errCode };
     }
     return { success: true, result: res.result };
+
   } catch (err: any) {
     return { success: false, error: err.message };
   }
@@ -619,29 +622,66 @@ export async function transitionRaffleStatus(params: {
     updateData.result_locked_by = userId;
   }
 
-  const { error } = await supabase
-    .from('raffles')
-    .update(updateData)
-    .eq('id', raffle.id);
+  try {
+    console.log(`[transitionRaffleStatus] Updating raffle ${raffle.id} from "${raffle.status}" to "${targetStatus}"...`);
+    
+    const { data, error } = await supabase
+      .from('raffles')
+      .update(updateData)
+      .eq('id', raffle.id)
+      .select()
+      .single();
 
-  if (error) {
-    return { success: false, errors: [error.message] };
+    if (error) {
+      console.error('[transitionRaffleStatus] Database error:', error);
+      
+      // Parse common database trigger errors
+      let userMessage = error.message;
+      if (error.message.includes('enforce_raffle_state_machine')) {
+        userMessage = 'El trigger de la base de datos rechazó la transición. Verifica que el sorteo tenga toda la información requerida.';
+      }
+      if (error.message.includes('generate_raffle_tickets')) {
+        userMessage = 'Error al generar los boletos automáticamente. Contacta soporte.';
+      }
+      if (error.message.includes('permission') || error.message.includes('policy')) {
+        userMessage = 'No tienes permisos para realizar esta acción. Verifica tu sesión.';
+      }
+      if (error.code === 'PGRST116') {
+        userMessage = 'No se encontró el sorteo. Puede haber sido eliminado.';
+      }
+      
+      return { success: false, errors: [userMessage, `(Detalle técnico: ${error.message})`] };
+    }
+
+    if (!data) {
+      console.error('[transitionRaffleStatus] No data returned after update');
+      return { success: false, errors: ['La actualización no retornó datos. El sorteo puede no existir o no tienes permisos.'] };
+    }
+
+    console.log(`[transitionRaffleStatus] Success! Raffle ${raffle.id} is now "${targetStatus}"`);
+
+    // Audit log
+    await createAuditLog({
+      userId,
+      userEmail,
+      action: 'raffle_status_change',
+      entityType: 'raffle',
+      entityId: raffle.id,
+      oldValue: { status: raffle.status },
+      newValue: { status: targetStatus },
+      details: { raffleName: raffle.name },
+    });
+
+    return { success: true, errors: [] };
+  } catch (err: any) {
+    console.error('[transitionRaffleStatus] Exception:', err);
+    return { 
+      success: false, 
+      errors: [`Error inesperado: ${err?.message || 'desconocido'}. Intenta de nuevo o contacta soporte.`] 
+    };
   }
-
-  // Audit log
-  await createAuditLog({
-    userId,
-    userEmail,
-    action: 'raffle_status_change',
-    entityType: 'raffle',
-    entityId: raffle.id,
-    oldValue: { status: raffle.status },
-    newValue: { status: targetStatus },
-    details: { raffleName: raffle.name },
-  });
-
-  return { success: true, errors: [] };
 }
+
 
 // ============================================================
 // DECLARE WINNER (with immutability)
@@ -669,12 +709,12 @@ export async function declareWinner(params: {
     errors.push('Esta rifa ya tiene un ganador declarado. El resultado es inmutable.');
     return { success: false, errors };
   }
-
-  // Validate number range
-  if (winningNumber < 1 || winningNumber > raffle.total_tickets) {
-    errors.push(`El número debe estar entre 1 y ${raffle.total_tickets}`);
+  // Validate number range: 0-based (0 to total_tickets - 1)
+  if (winningNumber < 0 || winningNumber > raffle.total_tickets - 1) {
+    errors.push(`El número debe estar entre 0 y ${raffle.total_tickets - 1} (numeración desde cero)`);
     return { success: false, errors };
   }
+
 
   // Role check
   if (userRole === 'organizer' && raffle.organizer_id !== userId) {
