@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { Raffle, Ticket, AppView, RAFFLE_STATUS_LABELS, RAFFLE_STATUS_COLORS, RAFFLE_STATUS_TRANSITIONS, RaffleStatus, StripeConnectStatus, RefundRequest, RefundStats, RefundStatus, REFUND_STATUS_LABELS, REFUND_STATUS_COLORS, Dispute, DisputeStatus, DISPUTE_STATUS_LABELS, DISPUTE_STATUS_COLORS, DisputeMessage, DisputeStats } from '@/lib/types';
+import { Raffle, Ticket, AppView, RAFFLE_STATUS_LABELS, RAFFLE_STATUS_COLORS, RAFFLE_STATUS_TRANSITIONS, RaffleStatus, StripeConnectStatus, RefundRequest, RefundStats, RefundStatus, REFUND_STATUS_LABELS, REFUND_STATUS_COLORS, Dispute, DisputeStatus, DISPUTE_STATUS_LABELS, DISPUTE_STATUS_COLORS, DisputeMessage, DisputeStats, OrganizerSubscription } from '@/lib/types';
 import { transitionRaffleStatus, declareWinner, validateRaffleTransition, createAuditLog } from '@/lib/database';
 import { createConnectAccount, checkConnectStatus, handleConnectReturn } from '@/lib/stripe';
 import { sendRaffleClosedNotification, sendWinnerDeclaredNotification } from '@/lib/notifications';
 import { listRefundRequests, approveRefund, denyRefund, bulkRefundCancelledRaffle, getRefundStats } from '@/lib/refunds';
 import { listDisputes, getDisputeDetail, addDisputeMessage, getDisputeStats } from '@/lib/disputes';
+import PlanSelector from '@/components/organizer/PlanSelector';
 import {
   Plus, Ticket as TicketIcon, DollarSign, TrendingUp, BarChart3,
   Eye, Edit, Trash2, Play, Pause, Trophy, Clock, CheckCircle2,
@@ -15,9 +16,11 @@ import {
   Lock, ShieldCheck, ArrowRight, FileText, Loader2, ExternalLink,
   RefreshCw, Wallet, Link2, Unlink, RotateCcw, AlertTriangle,
   ThumbsUp, ThumbsDown, MessageSquare, Zap, Scale, Send,
-  ArrowUpRight, Paperclip, Image as ImageIcon
+  ArrowUpRight, Paperclip, Image as ImageIcon, Crown
 } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
+
+
 
 
 interface OrganizerDashboardProps {
@@ -26,7 +29,8 @@ interface OrganizerDashboardProps {
 
 const OrganizerDashboard: React.FC<OrganizerDashboardProps> = ({ onNavigate }) => {
   const { user, updateProfile } = useAuth();
-  const [activeTab, setActiveTab] = useState<'raffles' | 'winner' | 'refunds' | 'disputes' | 'stripe' | 'reports'>('raffles');
+  const [activeTab, setActiveTab] = useState<'raffles' | 'winner' | 'refunds' | 'disputes' | 'stripe' | 'reports' | 'plan'>('raffles');
+
 
   const [raffles, setRaffles] = useState<Raffle[]>([]);
   const [loading, setLoading] = useState(true);
@@ -158,6 +162,18 @@ const OrganizerDashboard: React.FC<OrganizerDashboardProps> = ({ onNavigate }) =
   const handleStatusTransition = async (raffle: Raffle, targetStatus: RaffleStatus) => {
     if (!user) return;
 
+    // For draft → active, show confirmation
+    if (raffle.status === 'draft' && targetStatus === 'active') {
+      const confirmed = confirm(
+        `¿Activar "${raffle.name}"?\n\n` +
+        `Se generarán automáticamente ${raffle.total_tickets} boletos (del 1 al ${raffle.total_tickets}).\n` +
+        `Precio por boleto: $${raffle.price_per_ticket} MXN\n` +
+        `Ingreso potencial: $${(raffle.price_per_ticket * raffle.total_tickets).toLocaleString('es-MX')} MXN\n\n` +
+        `IMPORTANTE: Una vez activado, el precio y total de boletos no podrán modificarse. Esta acción es irreversible.`
+      );
+      if (!confirmed) return;
+    }
+
     const validation = validateRaffleTransition(raffle, targetStatus);
     if (!validation.valid) {
       setTransitionErrors(validation.errors);
@@ -165,13 +181,17 @@ const OrganizerDashboard: React.FC<OrganizerDashboardProps> = ({ onNavigate }) =
       return;
     }
 
+    // Show loading state
+    toast({ title: 'Procesando...', description: `Cambiando estado a "${RAFFLE_STATUS_LABELS[targetStatus]}"...` });
+
     const result = await transitionRaffleStatus({
       raffle, targetStatus, userId: user.id, userEmail: user.email, userRole: user.role,
     });
 
     if (result.success) {
-      setRaffles(prev => prev.map(r => r.id === raffle.id ? { ...r, status: targetStatus } : r));
-      toast({ title: 'Estado actualizado', description: `El sorteo ahora está en estado: ${RAFFLE_STATUS_LABELS[targetStatus]}` });
+      // Reload raffles from DB to get fresh data (including any trigger-generated tickets)
+      await loadRaffles();
+      toast({ title: 'Estado actualizado', description: `El sorteo ahora está en estado: ${RAFFLE_STATUS_LABELS[targetStatus]}${targetStatus === 'active' ? `. Se generaron ${raffle.total_tickets} boletos automáticamente.` : ''}` });
       setTransitionErrors([]);
 
       if (targetStatus === 'closed') {
@@ -180,9 +200,15 @@ const OrganizerDashboard: React.FC<OrganizerDashboardProps> = ({ onNavigate }) =
       }
     } else {
       setTransitionErrors(result.errors);
-      toast({ title: 'Error en transición', description: result.errors.join('\n'), variant: 'destructive' });
+      console.error('Transition errors:', result.errors);
+      toast({ 
+        title: 'Error en transición', 
+        description: result.errors.join('\n') + '\n\nSi el problema persiste, verifica que la configuración del sorteo esté completa.', 
+        variant: 'destructive' 
+      });
     }
   };
+
 
   const loadTickets = async (raffle: Raffle) => {
     const { data } = await supabase
@@ -485,11 +511,13 @@ const OrganizerDashboard: React.FC<OrganizerDashboardProps> = ({ onNavigate }) =
         <div className="flex gap-1 bg-gray-100 p-1 rounded-xl mb-6 overflow-x-auto">
           {[
             { id: 'raffles', label: 'Mis Sorteos', icon: <TicketIcon className="w-4 h-4" /> },
+            { id: 'plan', label: 'Mi Plan', icon: <Crown className="w-4 h-4" /> },
             { id: 'refunds', label: `Reembolsos ${refundStats.pending > 0 ? `(${refundStats.pending})` : ''}`, icon: <RotateCcw className="w-4 h-4" /> },
             { id: 'disputes', label: `Disputas ${activeDisputeCount > 0 ? `(${activeDisputeCount})` : ''}`, icon: <Scale className="w-4 h-4" /> },
             { id: 'winner', label: 'Ganadores', icon: <Trophy className="w-4 h-4" /> },
             { id: 'stripe', label: 'Stripe Connect', icon: <CreditCard className="w-4 h-4" /> },
             { id: 'reports', label: 'Reportes', icon: <BarChart3 className="w-4 h-4" /> },
+
           ].map(t => (
             <button
               key={t.id}
@@ -557,8 +585,28 @@ const OrganizerDashboard: React.FC<OrganizerDashboardProps> = ({ onNavigate }) =
               <div className="grid gap-4">
                 {filteredRaffles.map(raffle => {
                   const transitions = getAvailableTransitions(raffle);
+                  const isDraft = raffle.status === 'draft';
                   return (
-                    <div key={raffle.id} className="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md transition-shadow">
+                    <div key={raffle.id} className={`bg-white rounded-xl border p-5 hover:shadow-md transition-shadow ${isDraft ? 'border-amber-300 ring-1 ring-amber-200' : 'border-gray-200'}`}>
+                      {/* Draft banner */}
+                      {isDraft && (
+                        <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-lg p-3 mb-4 flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2">
+                            <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0" />
+                            <div>
+                              <p className="text-sm font-bold text-amber-800">Sorteo en borrador</p>
+                              <p className="text-xs text-amber-700">Actívalo para generar los boletos y comenzar a vender.</p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleStatusTransition(raffle, 'active')}
+                            className="flex items-center gap-1.5 px-4 py-2 text-sm font-bold text-white bg-gradient-to-r from-emerald-500 to-green-600 rounded-lg hover:from-emerald-600 hover:to-green-700 transition-all shadow-md shadow-emerald-200 whitespace-nowrap"
+                          >
+                            <Play className="w-4 h-4" /> Activar Ahora
+                          </button>
+                        </div>
+                      )}
+
                       <div className="flex flex-col sm:flex-row gap-4">
                         <div className="w-full sm:w-32 h-24 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-lg flex items-center justify-center flex-shrink-0">
                           {raffle.image_url ? (
@@ -583,22 +631,26 @@ const OrganizerDashboard: React.FC<OrganizerDashboardProps> = ({ onNavigate }) =
                             <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />{new Date(raffle.draw_date).toLocaleDateString('es-MX')}</span>
                             <span className="flex items-center gap-1"><CreditCard className="w-3.5 h-3.5" />{raffle.payment_method === 'stripe' ? 'Stripe' : 'Externo'}</span>
                           </div>
-                          <div className="mt-3">
-                            <div className="flex justify-between text-xs text-gray-500 mb-1">
-                              <span>{raffle.tickets_sold} vendidos</span>
-                              <span>{Math.round((raffle.tickets_sold / raffle.total_tickets) * 100)}%</span>
+                          {!isDraft && (
+                            <div className="mt-3">
+                              <div className="flex justify-between text-xs text-gray-500 mb-1">
+                                <span>{raffle.tickets_sold} vendidos</span>
+                                <span>{Math.round((raffle.tickets_sold / raffle.total_tickets) * 100)}%</span>
+                              </div>
+                              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                                <div className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full transition-all" style={{ width: `${Math.min(100, (raffle.tickets_sold / raffle.total_tickets) * 100)}%` }} />
+                              </div>
                             </div>
-                            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                              <div className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full transition-all" style={{ width: `${Math.min(100, (raffle.tickets_sold / raffle.total_tickets) * 100)}%` }} />
-                            </div>
-                          </div>
+                          )}
                         </div>
                       </div>
 
                       <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-gray-100">
-                        <button onClick={() => loadTickets(raffle)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
-                          <Eye className="w-3.5 h-3.5" /> Ver Boletos
-                        </button>
+                        {!isDraft && (
+                          <button onClick={() => loadTickets(raffle)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
+                            <Eye className="w-3.5 h-3.5" /> Ver Boletos
+                          </button>
+                        )}
                         {/* Closing Flow button - available for active, closed, validated, locked, winner_declared */}
                         {['active', 'closed', 'validated', 'locked', 'winner_declared'].includes(raffle.status) && (
                           <button
@@ -608,7 +660,8 @@ const OrganizerDashboard: React.FC<OrganizerDashboardProps> = ({ onNavigate }) =
                             <Trophy className="w-3.5 h-3.5" /> Cierre y Sorteo
                           </button>
                         )}
-                        {transitions.map(t => (
+                        {/* Show transition buttons (but not the "Activar" for draft since we have the banner) */}
+                        {transitions.filter(t => !(isDraft && t.status === 'active')).map(t => (
                           <button key={t.status} onClick={() => handleStatusTransition(raffle, t.status)} className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${t.color}`}>
                             {t.icon} {t.label}
                           </button>
@@ -639,6 +692,7 @@ const OrganizerDashboard: React.FC<OrganizerDashboardProps> = ({ onNavigate }) =
                     </div>
                   );
                 })}
+
               </div>
             )}
           </div>
@@ -1075,6 +1129,14 @@ const OrganizerDashboard: React.FC<OrganizerDashboardProps> = ({ onNavigate }) =
             </div>
           </div>
         )}
+
+        {/* ============================================================ */}
+        {/* PLAN TAB */}
+        {/* ============================================================ */}
+        {activeTab === 'plan' && (
+          <PlanSelector />
+        )}
+
 
         {/* ============================================================ */}
         {/* WINNER DECLARATION MODAL */}
