@@ -5,7 +5,8 @@ import { LotteryType, PaymentMethod, UnsoldWinnerPolicy, RAFFLE_VALIDATION_RULES
 import { createAuditLog } from '@/lib/database';
 import {
   ArrowLeft, Image, DollarSign, Calendar, Hash, Ticket,
-  CreditCard, AlertCircle, CheckCircle2, Upload, Info, Shield, Lock
+  CreditCard, AlertCircle, CheckCircle2, Upload, Info, Shield, Lock,
+  Play, Rocket, ArrowRight, Loader2
 } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 
@@ -18,6 +19,10 @@ const CreateRaffleForm: React.FC<CreateRaffleFormProps> = ({ onBack, onCreated }
   const { user } = useAuth();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [activating, setActivating] = useState(false);
+
+  // Created raffle state (for post-creation screen)
+  const [createdRaffle, setCreatedRaffle] = useState<any>(null);
 
   // Form state
   const [name, setName] = useState('');
@@ -77,20 +82,13 @@ const CreateRaffleForm: React.FC<CreateRaffleFormProps> = ({ onBack, onCreated }
       }).select().single();
 
       if (error) {
-        toast({ title: 'Error', description: error.message, variant: 'destructive' });
+        console.error('Error creating raffle:', error);
+        toast({ title: 'Error al crear sorteo', description: error.message, variant: 'destructive' });
       } else if (data) {
-        // Create tickets for the raffle
-        const tickets = Array.from({ length: parseInt(totalTickets) }, (_, i) => ({
-          raffle_id: data.id,
-          ticket_number: i + 1,
-          status: 'available',
-        }));
-
-        // Insert in batches of 100
-        for (let i = 0; i < tickets.length; i += 100) {
-          const batch = tickets.slice(i, i + 100);
-          await supabase.from('tickets').insert(batch);
-        }
+        // NOTE: Tickets are NOT created here anymore.
+        // The database trigger `enforce_raffle_state_machine` automatically calls
+        // `generate_raffle_tickets()` when the raffle transitions from draft → active.
+        // This ensures atomic ticket generation within the activation transaction.
 
         // Audit log
         await createAuditLog({
@@ -109,18 +107,196 @@ const CreateRaffleForm: React.FC<CreateRaffleFormProps> = ({ onBack, onCreated }
           },
         });
 
-        toast({ title: 'Sorteo creado', description: `"${name}" se creó como borrador. Flujo: Borrador → Activa → Cerrada → Validada → Bloqueada → Ganador` });
-        onCreated(data.id);
+        toast({ title: 'Sorteo creado', description: `"${name}" se creó como borrador.` });
+        
+        // Show post-creation screen instead of navigating away
+        setCreatedRaffle(data);
+        setStep(5); // Step 5 = post-creation screen
       }
     } catch (err) {
+      console.error('Exception creating raffle:', err);
       toast({ title: 'Error', description: 'No se pudo crear el sorteo', variant: 'destructive' });
     }
     setLoading(false);
   };
 
+  const handleActivateNow = async () => {
+    if (!createdRaffle || !user) return;
+    setActivating(true);
+
+    try {
+      // Update status from draft to active
+      // The DB trigger will automatically generate all ticket rows
+      const { error } = await supabase
+        .from('raffles')
+        .update({ 
+          status: 'active', 
+          updated_at: new Date().toISOString() 
+        })
+        .eq('id', createdRaffle.id);
+
+      if (error) {
+        console.error('Error activating raffle:', error);
+        toast({ 
+          title: 'Error al activar', 
+          description: `No se pudo activar el sorteo: ${error.message}. Puedes intentarlo desde el panel del organizador.`, 
+          variant: 'destructive' 
+        });
+        setActivating(false);
+        return;
+      }
+
+      // Audit log
+      await createAuditLog({
+        userId: user.id,
+        userEmail: user.email,
+        action: 'raffle_status_change',
+        entityType: 'raffle',
+        entityId: createdRaffle.id,
+        oldValue: { status: 'draft' },
+        newValue: { status: 'active' },
+        details: { raffleName: createdRaffle.name, activatedFromCreation: true },
+      });
+
+      toast({ 
+        title: 'Sorteo activado', 
+        description: `"${createdRaffle.name}" está activo. Se generaron ${createdRaffle.total_tickets} boletos automáticamente. ¡Ya pueden comprar boletos!` 
+      });
+      onCreated(createdRaffle.id);
+    } catch (err: any) {
+      console.error('Exception activating raffle:', err);
+      toast({ 
+        title: 'Error al activar', 
+        description: `Error inesperado: ${err?.message || 'desconocido'}. Puedes activarlo desde el panel.`, 
+        variant: 'destructive' 
+      });
+    }
+    setActivating(false);
+  };
+
   const canProceedStep1 = name && pricePerTicket && totalTickets;
   const canProceedStep2 = salesCloseDate && drawDate;
   const canProceedStep3 = lotteryType && lotteryDrawDate;
+
+  // ============================================================
+  // STEP 5: POST-CREATION SCREEN
+  // ============================================================
+  if (step === 5 && createdRaffle) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-lg">
+            {/* Success header */}
+            <div className="bg-gradient-to-r from-emerald-500 to-green-600 p-8 text-center">
+              <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <CheckCircle2 className="w-9 h-9 text-white" />
+              </div>
+              <h2 className="text-2xl font-bold text-white mb-2">Sorteo Creado Exitosamente</h2>
+              <p className="text-emerald-100">"{createdRaffle.name}" está listo como borrador</p>
+            </div>
+
+            {/* Summary */}
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-gray-50 rounded-lg p-3">
+                  <div className="text-xs text-gray-500">Nombre</div>
+                  <div className="text-sm font-medium text-gray-900">{createdRaffle.name}</div>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-3">
+                  <div className="text-xs text-gray-500">Precio/Boleto</div>
+                  <div className="text-sm font-medium text-gray-900">${createdRaffle.price_per_ticket} MXN</div>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-3">
+                  <div className="text-xs text-gray-500">Total Boletos</div>
+                  <div className="text-sm font-medium text-gray-900">{createdRaffle.total_tickets}</div>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-3">
+                  <div className="text-xs text-gray-500">Ingreso Potencial</div>
+                  <div className="text-sm font-medium text-emerald-600">
+                    ${(createdRaffle.price_per_ticket * createdRaffle.total_tickets).toLocaleString('es-MX')} MXN
+                  </div>
+                </div>
+              </div>
+
+              {/* What happens next */}
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                <h3 className="text-sm font-bold text-blue-800 mb-3 flex items-center gap-2">
+                  <Info className="w-4 h-4" /> ¿Qué sigue?
+                </h3>
+                <div className="space-y-2">
+                  <div className="flex items-start gap-3">
+                    <div className="w-6 h-6 bg-blue-200 rounded-full flex items-center justify-center text-xs font-bold text-blue-700 flex-shrink-0 mt-0.5">1</div>
+                    <div>
+                      <p className="text-sm font-medium text-blue-900">Activar el sorteo</p>
+                      <p className="text-xs text-blue-700">Al activar, se generarán automáticamente los {createdRaffle.total_tickets} boletos y el sorteo estará disponible para la venta.</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <div className="w-6 h-6 bg-blue-200 rounded-full flex items-center justify-center text-xs font-bold text-blue-700 flex-shrink-0 mt-0.5">2</div>
+                    <div>
+                      <p className="text-sm font-medium text-blue-900">Compartir con participantes</p>
+                      <p className="text-xs text-blue-700">Los participantes podrán buscar y comprar boletos.</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <div className="w-6 h-6 bg-blue-200 rounded-full flex items-center justify-center text-xs font-bold text-blue-700 flex-shrink-0 mt-0.5">3</div>
+                    <div>
+                      <p className="text-sm font-medium text-blue-900">Cerrar y declarar ganador</p>
+                      <p className="text-xs text-blue-700">Cuando termine la venta, sigue el flujo: Cerrar → Validar → Bloquear → Declarar Ganador.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Activation warning */}
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <div className="flex items-start gap-2">
+                  <Lock className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs text-amber-800">
+                    <strong>Importante:</strong> Una vez activado, el precio y total de boletos no podrán modificarse. La activación es irreversible.
+                  </p>
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex flex-col gap-3 pt-2">
+                <button
+                  onClick={handleActivateNow}
+                  disabled={activating}
+                  className="w-full py-3.5 bg-gradient-to-r from-emerald-500 to-green-600 text-white rounded-xl font-bold hover:from-emerald-600 hover:to-green-700 transition-all shadow-lg shadow-emerald-200 flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {activating ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      Activando y generando {createdRaffle.total_tickets} boletos...
+                    </>
+                  ) : (
+                    <>
+                      <Rocket className="w-5 h-5" />
+                      Activar Sorteo Ahora
+                    </>
+                  )}
+                </button>
+
+                <button
+                  onClick={() => onCreated(createdRaffle.id)}
+                  disabled={activating}
+                  className="w-full py-3 border border-gray-300 text-gray-700 rounded-xl font-medium hover:bg-gray-50 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Ir al Panel (activar después)
+                </button>
+              </div>
+
+              <p className="text-xs text-gray-400 text-center">
+                También puedes activar el sorteo desde el Panel del Organizador en cualquier momento.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -475,7 +651,7 @@ const CreateRaffleForm: React.FC<CreateRaffleFormProps> = ({ onBack, onCreated }
               <div className="flex items-start gap-2">
                 <Shield className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
                 <p className="text-sm text-blue-700">
-                  El sorteo se creará como <strong>borrador</strong>. Flujo de estados: Borrador → Activa → Cerrada → Validada → Bloqueada → Con Ganador. Cada transición es irreversible y queda registrada en auditoría.
+                  El sorteo se creará como <strong>borrador</strong>. En el siguiente paso podrás activarlo inmediatamente o hacerlo después desde el panel. Al activar, se generarán automáticamente todos los boletos.
                 </p>
               </div>
             </div>
@@ -500,3 +676,4 @@ const CreateRaffleForm: React.FC<CreateRaffleFormProps> = ({ onBack, onCreated }
 };
 
 export default CreateRaffleForm;
+
