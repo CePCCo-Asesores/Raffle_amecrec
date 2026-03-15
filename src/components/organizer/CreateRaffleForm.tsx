@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { LotteryType, PaymentMethod, UnsoldWinnerPolicy, RAFFLE_VALIDATION_RULES } from '@/lib/types';
@@ -20,6 +20,28 @@ const CreateRaffleForm: React.FC<CreateRaffleFormProps> = ({ onBack, onCreated }
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [activating, setActivating] = useState(false);
+
+  // Plan limits
+  const [maxTicketsPerRaffle, setMaxTicketsPerRaffle] = useState<number>(10000);
+  const [planName, setPlanName] = useState<string>('');
+
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from('organizer_subscriptions')
+      .select('*, plan:subscription_plans(name, max_tickets_per_raffle)')
+      .eq('organizer_id', user.id)
+      .eq('status', 'active')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.plan) {
+          setMaxTicketsPerRaffle((data.plan as any).max_tickets_per_raffle);
+          setPlanName((data.plan as any).name);
+        }
+      });
+  }, [user]);
 
   // Created raffle state (for post-creation screen)
   const [createdRaffle, setCreatedRaffle] = useState<any>(null);
@@ -174,7 +196,7 @@ const CreateRaffleForm: React.FC<CreateRaffleFormProps> = ({ onBack, onCreated }
     setActivating(false);
   };
 
-  const canProceedStep1 = name && pricePerTicket && totalTickets;
+  const canProceedStep1 = name && pricePerTicket && totalTickets && parseInt(totalTickets) <= maxTicketsPerRaffle;
   const canProceedStep2 = salesCloseDate && drawDate;
   const canProceedStep3 = lotteryType && lotteryDrawDate;
 
@@ -396,13 +418,28 @@ const CreateRaffleForm: React.FC<CreateRaffleFormProps> = ({ onBack, onCreated }
                     value={totalTickets}
                     onChange={e => setTotalTickets(e.target.value)}
                     min="10"
-                    max="10000"
-                    className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    max={maxTicketsPerRaffle}
+                    className={`w-full pl-10 pr-4 py-2.5 border rounded-lg focus:ring-2 focus:border-transparent ${
+                      totalTickets && parseInt(totalTickets) > maxTicketsPerRaffle
+                        ? 'border-red-400 focus:ring-red-500'
+                        : 'border-gray-300 focus:ring-blue-500'
+                    }`}
                     placeholder="100"
                   />
                 </div>
-                {totalTickets && (
-                  <p className="text-xs text-gray-500 mt-1">Números del 1 al {totalTickets}</p>
+                <div className="flex items-center justify-between mt-1">
+                  {totalTickets ? (
+                    <p className="text-xs text-gray-500">Números del 1 al {parseInt(totalTickets).toLocaleString('es-MX')}</p>
+                  ) : <span />}
+                  <p className={`text-xs font-medium ${totalTickets && parseInt(totalTickets) > maxTicketsPerRaffle ? 'text-red-600' : 'text-gray-400'}`}>
+                    Máximo: {maxTicketsPerRaffle.toLocaleString('es-MX')} {planName ? `(Plan ${planName})` : ''}
+                  </p>
+                </div>
+                {totalTickets && parseInt(totalTickets) > maxTicketsPerRaffle && (
+                  <div className="flex items-center gap-1.5 mt-1.5 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                    <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                    Tu plan {planName} permite máximo {maxTicketsPerRaffle.toLocaleString('es-MX')} boletos por sorteo. Actualiza tu plan para crear sorteos más grandes.
+                  </div>
                 )}
               </div>
             </div>
@@ -676,4 +713,6 @@ const CreateRaffleForm: React.FC<CreateRaffleFormProps> = ({ onBack, onCreated }
 };
 
 export default CreateRaffleForm;
+
+
 
