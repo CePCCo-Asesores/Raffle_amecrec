@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Profile, UserRole } from '@/lib/types';
 import { toast } from '@/components/ui/use-toast';
@@ -28,15 +28,16 @@ export const useAuth = () => useContext(AuthContext);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const mountedRef = useRef(true);
 
-  const fetchProfile = useCallback(async (userId: string) => {
+  const fetchProfile = useCallback(async (userId: string): Promise<Profile | null> => {
     try {
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .single();
-      
+
       if (error) {
         console.error('Error fetching profile:', error);
         return null;
@@ -49,42 +50,49 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   useEffect(() => {
-    const initAuth = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
+    mountedRef.current = true;
+
+    // Un solo listener maneja todo: sesión inicial + cambios posteriores.
+    // onAuthStateChange en Supabase v2 dispara INITIAL_SESSION con la sesión
+    // cacheada en localStorage, eliminando la race condition con getSession().
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (!mountedRef.current) return;
+
         if (session?.user) {
-          const profile = await fetchProfile(session.user.id);
-          setUser(profile);
+          // Usar setTimeout para no bloquear el callback de Supabase con await
+          // (evita deadlocks internos del cliente de Supabase)
+          setTimeout(async () => {
+            if (!mountedRef.current) return;
+            const profile = await fetchProfile(session.user.id);
+            if (!mountedRef.current) return;
+            setUser(profile);
+            setLoading(false);
+          }, 0);
+        } else {
+          setUser(null);
+          setLoading(false);
         }
-      } catch (err) {
-        console.error('Auth init error:', err);
-      } finally {
-        setLoading(false);
       }
+    );
+
+    return () => {
+      mountedRef.current = false;
+      subscription.unsubscribe();
     };
-
-    initAuth();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session?.user) {
-        const profile = await fetchProfile(session.user.id);
-        setUser(profile);
-      } else if (event === 'SIGNED_OUT') {
-        setUser(null);
-      }
-    });
-
-    return () => subscription.unsubscribe();
   }, [fetchProfile]);
 
-  const signUp = async (email: string, password: string, fullName: string, role: UserRole): Promise<boolean> => {
+  const signUp = async (
+    email: string,
+    password: string,
+    fullName: string,
+    role: UserRole
+  ): Promise<boolean> => {
     try {
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: {
-          data: { full_name: fullName, role },
-        },
+        options: { data: { full_name: fullName, role } },
       });
 
       if (error) {
@@ -93,24 +101,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (data.user) {
-        const { error: profileError } = await supabase.from('profiles').upsert({
+        await supabase.from('profiles').upsert({
           id: data.user.id,
           email,
           full_name: fullName,
           role,
         });
-
-        if (profileError) {
-          console.error('Profile creation error:', profileError);
-        }
-
-        const profile = await fetchProfile(data.user.id);
-        setUser(profile);
         toast({ title: 'Registro exitoso', description: `Bienvenido a Sorteos AMECREC, ${fullName}!` });
         return true;
       }
       return false;
-    } catch (err) {
+    } catch {
       toast({ title: 'Error', description: 'Ocurrió un error inesperado', variant: 'destructive' });
       return false;
     }
@@ -126,13 +127,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (data.user) {
+        // El onAuthStateChange se encarga de hacer setUser — solo mostramos toast
         const profile = await fetchProfile(data.user.id);
-        setUser(profile);
         toast({ title: 'Bienvenido', description: `Hola de nuevo, ${profile?.full_name || email}!` });
         return true;
       }
       return false;
-    } catch (err) {
+    } catch {
       toast({ title: 'Error', description: 'Ocurrió un error inesperado', variant: 'destructive' });
       return false;
     }
@@ -140,42 +141,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signOut = async () => {
     await supabase.auth.signOut();
-    setUser(null);
+    // onAuthStateChange maneja setUser(null)
     toast({ title: 'Sesión cerrada', description: 'Has cerrado sesión correctamente' });
   };
 
   const updateProfile = async (updates: Partial<Profile>): Promise<boolean> => {
     if (!user) return false;
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update(updates)
-        .eq('id', user.id);
-
+      const { error } = await supabase.from('profiles').update(updates).eq('id', user.id);
       if (error) {
         toast({ title: 'Error', description: 'No se pudo actualizar el perfil', variant: 'destructive' });
         return false;
       }
-
-      setUser(prev => prev ? { ...prev, ...updates } : null);
+      setUser(prev => (prev ? { ...prev, ...updates } : null));
       toast({ title: 'Perfil actualizado', description: 'Los cambios se guardaron correctamente' });
       return true;
-    } catch (err) {
+    } catch {
       return false;
     }
   };
 
   return (
-    <AuthContext.Provider value={{
-      user,
-      loading,
-      isAuthenticated: !!user,
-      signUp,
-      signIn,
-      signOut,
-      updateProfile,
-    }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        isAuthenticated: !!user,
+        signUp,
+        signIn,
+        signOut,
+        updateProfile,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
 };
+
