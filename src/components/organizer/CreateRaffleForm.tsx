@@ -60,7 +60,17 @@ const CreateRaffleForm: React.FC<CreateRaffleFormProps> = ({ onBack, onCreated }
   const [lotteryDrawDate, setLotteryDrawDate] = useState('');
   const [lotteryDrawNumber, setLotteryDrawNumber] = useState('');
 
-  const lotteryTypes: string[] = ['Mayor', 'Superior', 'Zodiaco', 'Especial', 'Gordo', 'Otro'];
+  // Metadatos por tipo: número de inicio y cantidad de dígitos para display
+  const LOTTERY_META: Record<string, { start: number; tickets: number; desc: string }> = {
+    'Mayor':    { start: 1, tickets: 60000, desc: 'Martes · 00001–60000 · 3 series' },
+    'Superior': { start: 1, tickets: 60000, desc: 'Viernes · 00001–60000 · 2 series' },
+    'Zodiaco':  { start: 0, tickets: 10000, desc: 'Domingo · 0000–9999 · 1 serie por signo' },
+    'Especial': { start: 1, tickets: 60000, desc: 'Mensual · 00001–60000 · 2 series' },
+    'Gordo':    { start: 1, tickets: 80000, desc: '24 dic · 00001–80000 · 4 series' },
+    'Magno':    { start: 1, tickets: 60000, desc: 'Fechas especiales · 00001–60000 · 3 series' },
+    'Otro':     { start: 1, tickets: 0,     desc: 'Configura manualmente' },
+  };
+  const lotteryTypes = Object.keys(LOTTERY_META);
 
   const unsoldPolicies: { value: UnsoldWinnerPolicy; label: string; desc: string }[] = [
     { value: 'desert', label: 'Desierto', desc: 'Se declara desierto el premio si el número ganador no fue vendido' },
@@ -98,6 +108,7 @@ const CreateRaffleForm: React.FC<CreateRaffleFormProps> = ({ onBack, onCreated }
         unsold_winner_policy: unsoldPolicy,
         status: 'draft',
         lottery_type: lotteryType,
+        ticket_start_number: LOTTERY_META[lotteryType]?.start ?? 1,
         lottery_draw_date: lotteryDrawDate ? new Date(lotteryDrawDate).toISOString() : null,
         lottery_draw_number: lotteryDrawNumber || null,
         result_locked: false,
@@ -585,7 +596,7 @@ const CreateRaffleForm: React.FC<CreateRaffleFormProps> = ({ onBack, onCreated }
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
               >
                 {lotteryTypes.map(t => (
-                  <option key={t} value={t}>{t}</option>
+                  <option key={t} value={t}>{t}{LOTTERY_META[t]?.desc ? ` — ${LOTTERY_META[t].desc}` : ''}</option>
                 ))}
               </select>
             </div>
@@ -713,6 +724,11 @@ const CreateRaffleForm: React.FC<CreateRaffleFormProps> = ({ onBack, onCreated }
 };
 
 export default CreateRaffleForm;
+
+
+
+
+
 
 
 
