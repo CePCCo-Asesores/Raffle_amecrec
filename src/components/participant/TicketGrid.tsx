@@ -61,6 +61,9 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
   const [conflictTickets, setConflictTickets] = useState<number[]>([]);
   const [lastRefresh, setLastRefresh]         = useState(new Date());
 
+  // Número de inicio según tipo de sorteo (Zodiaco=0, resto=1)
+  const START = (raffle as any).ticket_start_number ?? 1;
+
   // Paginación por bloques de 500
   const BLOCK_SIZE = 500;
   const totalBlocks = Math.ceil(raffle.total_tickets / BLOCK_SIZE);
@@ -413,16 +416,18 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
   };
 
   // Modo búsqueda: mostrar solo el número exacto + vecinos
-  // Los boletos van de 0 a total-1, así que el número máximo es total-1
-  const formatTicketNumber = (n: number, total: number): string =>
-    n.toString().padStart((total - 1).toString().length, '0');
+  // Dígitos según el número más alto del sorteo
+  const formatTicketNumber = (n: number, total: number): string => {
+    const maxNum = START + total - 1;
+    return n.toString().padStart(maxNum.toString().length, '0');
+  };
 
   const searchResults = useMemo(() => {
     if (!searchNumber) return null;
     const n = parseInt(searchNumber);
     if (isNaN(n)) return [];
     const matches: number[] = [];
-    for (let i = Math.max(0, n - 2); i <= Math.min(raffle.total_tickets - 1, n + 2); i++) {
+    for (let i = Math.max(START, n - 2); i <= Math.min(START + raffle.total_tickets - 1, n + 2); i++) {
       if (i.toString().includes(searchNumber) || formatTicketNumber(i, raffle.total_tickets).includes(searchNumber)) {
         matches.push(i);
       }
@@ -431,8 +436,8 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
   }, [searchNumber, raffle.total_tickets]);
 
   // ── render ────────────────────────────────────────────────────────────────
-  const blockFrom = activeBlock * BLOCK_SIZE;                                    // 0-based
-  const blockTo   = Math.min((activeBlock + 1) * BLOCK_SIZE - 1, raffle.total_tickets - 1);
+  const blockFrom = START + activeBlock * BLOCK_SIZE;
+  const blockTo   = Math.min(START + (activeBlock + 1) * BLOCK_SIZE - 1, START + raffle.total_tickets - 1);
   const blockNums = Array.from({ length: blockTo - blockFrom + 1 }, (_, i) => blockFrom + i);
 
   return (
@@ -562,8 +567,8 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
         {totalBlocks > 1 && !searchResults && (
           <div className="mb-3 flex flex-wrap gap-2">
             {Array.from({ length: totalBlocks }, (_, i) => {
-              const from = i * BLOCK_SIZE;
-              const to   = Math.min((i + 1) * BLOCK_SIZE - 1, raffle.total_tickets - 1);
+              const from = START + i * BLOCK_SIZE;
+              const to   = Math.min(START + (i + 1) * BLOCK_SIZE - 1, START + raffle.total_tickets - 1);
               const hasSelected = selectedTickets.some(n => n >= from && n <= to);
               return (
                 <button
