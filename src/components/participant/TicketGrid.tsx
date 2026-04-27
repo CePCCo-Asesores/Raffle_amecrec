@@ -37,6 +37,12 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
   const reservedByMeRef = useRef<number[]>([]);
 
+  // Ref para acceder a selectedTickets y user?.id en callbacks sin recrear closures
+  const selectedTicketsRef = useRef<number[]>([]);
+  const userIdRef = useRef<string | undefined>(undefined);
+  selectedTicketsRef.current = selectedTickets;
+  userIdRef.current = user?.id;
+
   const loadTickets = useCallback(async () => {
     const { data } = await supabase
       .from('tickets')
@@ -46,13 +52,15 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
 
     if (data) {
       setTickets(data);
-      // Check if any selected tickets are no longer available
-      if (selectedTickets.length > 0) {
-        const unavailable = selectedTickets.filter(num => {
+      // Usar refs para leer valores actuales sin generar dependencias de closure
+      const currentSelected = selectedTicketsRef.current;
+      const currentUserId = userIdRef.current;
+      if (currentSelected.length > 0) {
+        const unavailable = currentSelected.filter(num => {
           const t = data.find((tk: any) => tk.ticket_number === num);
           if (!t) return true;
           if (t.status === 'sold' || t.status === 'paid') return true;
-          if (t.status === 'reserved' && t.reserved_by !== user?.id) {
+          if (t.status === 'reserved' && t.reserved_by !== currentUserId) {
             // Check if reservation expired
             if (t.reserved_until && new Date(t.reserved_until) < new Date()) return false;
             return true;
@@ -67,14 +75,13 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
             description: `Los boletos #${unavailable.join(', #')} fueron tomados por otro usuario y se removieron de tu selección.`,
             variant: 'destructive',
           });
-          // Clear conflict indicators after 3 seconds
           setTimeout(() => setConflictTickets([]), 3000);
         }
       }
     }
     setLoading(false);
     setLastRefresh(new Date());
-  }, [raffle.id, selectedTickets, user?.id]);
+  }, [raffle.id]); // ← ya no depende de selectedTickets ni user?.id (se leen por ref)
 
   // Check for payment return from Stripe
   useEffect(() => {
@@ -113,7 +120,7 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
     return () => clearInterval(interval);
   }, [raffle.id]);
 
-  // Real-time subscription for ticket changes
+  // Real-time subscription — usa refs para no recrear el canal en cada cambio de selectedTickets
   useEffect(() => {
     const channel = supabase
       .channel(`tickets-${raffle.id}`)
@@ -131,11 +138,15 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
             t.id === updated.id ? { ...t, ...updated } : t
           ));
 
-          // If someone else took a ticket we selected, alert the user
+          // Leer valores actuales desde refs (sin stale closure)
+          const currentSelected = selectedTicketsRef.current;
+          const currentUserId = userIdRef.current;
+
+          // Si alguien más compró un boleto que teníamos seleccionado
           if (
             (updated.status === 'sold' || updated.status === 'paid') &&
-            updated.participant_id !== user?.id &&
-            selectedTickets.includes(updated.ticket_number)
+            updated.participant_id !== currentUserId &&
+            currentSelected.includes(updated.ticket_number)
           ) {
             setConflictTickets(prev => [...prev, updated.ticket_number]);
             setSelectedTickets(prev => prev.filter(n => n !== updated.ticket_number));
@@ -147,11 +158,11 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
             setTimeout(() => setConflictTickets(prev => prev.filter(n => n !== updated.ticket_number)), 3000);
           }
 
-          // If someone reserved a ticket we were looking at
+          // Si alguien más reservó un boleto que teníamos seleccionado
           if (
             updated.status === 'reserved' &&
-            updated.reserved_by !== user?.id &&
-            selectedTickets.includes(updated.ticket_number)
+            updated.reserved_by !== currentUserId &&
+            currentSelected.includes(updated.ticket_number)
           ) {
             setSelectedTickets(prev => prev.filter(n => n !== updated.ticket_number));
             toast({
@@ -167,7 +178,7 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [raffle.id, user?.id, selectedTickets]);
+  }, [raffle.id]); // ← ya no depende de selectedTickets ni user?.id
 
   // Cleanup reservations on unmount
   useEffect(() => {
@@ -827,3 +838,4 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
 };
 
 export default TicketGrid;
+
