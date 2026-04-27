@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import { useAppContext } from '@/contexts/AppContext';
 import { Raffle, RAFFLE_VALIDATION_RULES } from '@/lib/types';
 import { atomicTicketPurchase, reserveTickets, releaseTickets } from '@/lib/database';
 import { createCheckoutSession, handlePaymentReturn, verifyPayment } from '@/lib/stripe';
@@ -43,6 +44,7 @@ function useCols(): number {
 // ─── componente ──────────────────────────────────────────────────────────────
 const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
   const { user, isAuthenticated } = useAuth();
+  const { openAuthModal } = useAppContext();
   const cols = useCols();
 
   // ticketMap solo almacena boletos NO-disponibles + los propios.
@@ -287,7 +289,7 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
   // ── toggleTicket ──────────────────────────────────────────────────────────
   const toggleTicket = async (num: number) => {
     if (!isAuthenticated || !user) {
-      toast({ title: 'Inicia sesión', description: 'Necesitas una cuenta para comprar boletos', variant: 'destructive' });
+      openAuthModal('register');
       return;
     }
     if (raffle.status !== 'active') {
@@ -704,6 +706,7 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
 };
 
 export default TicketGrid;
+
 
 
 
