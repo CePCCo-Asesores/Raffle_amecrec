@@ -414,6 +414,9 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
   };
 
   // Modo búsqueda: mostrar solo el número exacto + vecinos
+  const formatTicketNumber = (n: number, total: number): string =>
+    n.toString().padStart(total.toString().length, '0');
+
   const searchResults = useMemo(() => {
     if (!searchNumber) return null;
     const n = parseInt(searchNumber);
@@ -427,11 +430,11 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
     return matches;
   }, [searchNumber, raffle.total_tickets]);
 
-  function formatTicketNumber(n: number, total: number): string {
-    return n.toString().padStart(total.toString().length, '0');
-  }
-
   // ── render ────────────────────────────────────────────────────────────────
+  const blockFrom = activeBlock * BLOCK_SIZE + 1;
+  const blockTo   = Math.min((activeBlock + 1) * BLOCK_SIZE, raffle.total_tickets);
+  const blockNums = Array.from({ length: blockTo - blockFrom + 1 }, (_, i) => blockFrom + i);
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -603,17 +606,9 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
               </p>
             </div>
           ) : (
-            // Bloque activo: solo 500 boletos a la vez
-            (() => {
-              const from = activeBlock * BLOCK_SIZE + 1;
-              const to   = Math.min((activeBlock + 1) * BLOCK_SIZE, raffle.total_tickets);
-              const nums = Array.from({ length: to - from + 1 }, (_, i) => from + i);
-              return (
-                <div className="flex flex-wrap gap-2">
-                  {nums.map(renderTicketButton)}
-                </div>
-              );
-            })()
+            <div className="flex flex-wrap gap-2">
+              {blockNums.map(renderTicketButton)}
+            </div>
           )}
         </div>
 
@@ -704,4 +699,5 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
 };
 
 export default TicketGrid;
+
 
