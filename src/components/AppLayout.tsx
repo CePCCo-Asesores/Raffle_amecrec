@@ -28,29 +28,27 @@ const AppLayout: React.FC = () => {
   } = useAppContext();
   const { user, isAuthenticated, loading } = useAuth();
 
-  // Auto-redirect to dashboard on login
+  // Redirección al dashboard cuando el usuario inicia sesión desde landing
   useEffect(() => {
-    if (isAuthenticated && user && currentView === 'landing') {
-      switch (user.role) {
-        case 'admin':
-          navigateTo('admin-dashboard');
-          break;
-        case 'organizer':
-          navigateTo('organizer-dashboard');
-          break;
-        case 'participant':
-          navigateTo('participant-dashboard');
-          break;
-      }
+    if (!isAuthenticated || !user || currentView !== 'landing') return;
+    switch (user.role) {
+      case 'admin':       navigateTo('admin-dashboard');       break;
+      case 'organizer':   navigateTo('organizer-dashboard');   break;
+      case 'participant': navigateTo('participant-dashboard'); break;
     }
-  }, [isAuthenticated, user]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, user?.role]); // user.role es suficiente; navigateTo es estable
 
-  // Auto-redirect to landing on logout
+  // Redirección a landing cuando cierra sesión (solo vistas protegidas)
   useEffect(() => {
-    if (!isAuthenticated && !loading && currentView !== 'landing' && currentView !== 'raffle-explorer' && currentView !== 'raffle-public') {
+    if (loading) return; // esperar a que auth resuelva
+    if (isAuthenticated) return;
+    const publicViews = ['landing', 'raffle-explorer', 'raffle-public'];
+    if (!publicViews.includes(currentView)) {
       navigateTo('landing');
     }
-  }, [isAuthenticated, loading]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, loading]); // currentView NO va en deps: solo reaccionar al cambio de auth
 
   const handleSelectRaffle = (raffle: Raffle) => {
     navigateTo('raffle-detail', { raffle });
