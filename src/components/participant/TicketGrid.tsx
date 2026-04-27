@@ -403,8 +403,7 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
         onClick={() => toggleTicket(num)}
         disabled={!isClickable(num)}
         title={`Boleto #${num}`}
-        style={{ height: CELL_H, flex: '1 1 0' }}
-        className={`rounded-lg flex items-center justify-center text-xs font-bold transition-all duration-150 relative select-none ${getColor(num)}`}
+        className={`h-11 min-w-[2.5rem] flex-1 rounded-lg flex items-center justify-center text-xs font-bold transition-all duration-150 relative select-none ${getColor(num)}`}
       >
         {reservingTicket === num ? <Loader2 className="w-3 h-3 animate-spin" /> : num}
         {badge === 'lock' && <Lock className="w-2 h-2 absolute top-0.5 right-0.5 opacity-40" />}
@@ -699,5 +698,6 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
 };
 
 export default TicketGrid;
+
 
 
