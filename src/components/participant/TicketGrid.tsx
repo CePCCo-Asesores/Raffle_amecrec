@@ -28,20 +28,12 @@ interface TicketGridProps {
   onBack: () => void;
 }
 
-// ─── constantes de layout ────────────────────────────────────────────────────
-const CELL_H   = 44;   // altura del botón (px)
-const GAP      = 8;    // gap entre celdas (px)
-const ROW_H    = CELL_H + GAP;
-const OVERSCAN = 4;    // filas extra arriba/abajo del viewport
-
 function useCols(): number {
   const [cols, setCols] = useState(() =>
     window.innerWidth >= 1024 ? 12 : window.innerWidth >= 768 ? 10 : window.innerWidth >= 640 ? 8 : 5
   );
   useEffect(() => {
-    const handler = () => {
-      setCols(window.innerWidth >= 1024 ? 12 : window.innerWidth >= 768 ? 10 : window.innerWidth >= 640 ? 8 : 5);
-    };
+    const handler = () => setCols(window.innerWidth >= 1024 ? 12 : window.innerWidth >= 768 ? 10 : window.innerWidth >= 640 ? 8 : 5);
     window.addEventListener('resize', handler);
     return () => window.removeEventListener('resize', handler);
   }, []);
@@ -69,11 +61,10 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
   const [conflictTickets, setConflictTickets] = useState<number[]>([]);
   const [lastRefresh, setLastRefresh]         = useState(new Date());
 
-  // Virtual scroll
-  const [scrollTop, setScrollTop]   = useState(0);
-  const [viewportH, setViewportH]   = useState(560);
-  const gridRef = useRef<HTMLDivElement>(null);
-  const rafRef  = useRef<number>(0);
+  // Paginación por bloques de 500
+  const BLOCK_SIZE = 500;
+  const totalBlocks = Math.ceil(raffle.total_tickets / BLOCK_SIZE);
+  const [activeBlock, setActiveBlock] = useState(0);
 
   // Refs para callbacks estables
   const reservedByMeRef    = useRef<number[]>([]);
@@ -249,21 +240,6 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
     return () => clearInterval(id);
   }, [reservationTimer, raffle.id, user?.id]);
 
-  // ── virtual scroll ────────────────────────────────────────────────────────
-  useEffect(() => {
-    const el = gridRef.current;
-    if (!el) return;
-    setViewportH(el.clientHeight);
-    const ro = new ResizeObserver(() => setViewportH(el.clientHeight));
-    ro.observe(el);
-    const onScroll = () => {
-      cancelAnimationFrame(rafRef.current);
-      rafRef.current = requestAnimationFrame(() => setScrollTop(el.scrollTop));
-    };
-    el.addEventListener('scroll', onScroll, { passive: true });
-    return () => { ro.disconnect(); el.removeEventListener('scroll', onScroll); };
-  }, []);
-
   // ── helpers de estado de boleto ───────────────────────────────────────────
   const getInfo = useCallback((num: number): TicketInfo => {
     return ticketMap.get(num) ?? { id: '', status: 'available' };
@@ -418,11 +394,6 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
   const formatTime = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
 
   // ── virtual grid ──────────────────────────────────────────────────────────
-  const totalRows  = Math.ceil(raffle.total_tickets / cols);
-  const totalGridH = totalRows * ROW_H;
-  const startRow   = Math.max(0, Math.floor(scrollTop / ROW_H) - OVERSCAN);
-  const endRow     = Math.min(totalRows - 1, Math.ceil((scrollTop + viewportH) / ROW_H) + OVERSCAN);
-  const paddingTop = startRow * ROW_H;
 
   const renderTicketButton = (num: number) => {
     const badge = hasBadge(num);
@@ -584,6 +555,33 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
           </div>
         </div>
 
+        {/* Selector de bloque — solo si hay más de 500 boletos */}
+        {totalBlocks > 1 && !searchResults && (
+          <div className="mb-3 flex flex-wrap gap-2">
+            {Array.from({ length: totalBlocks }, (_, i) => {
+              const from = i * BLOCK_SIZE + 1;
+              const to   = Math.min((i + 1) * BLOCK_SIZE, raffle.total_tickets);
+              const hasSelected = selectedTickets.some(n => n >= from && n <= to);
+              return (
+                <button
+                  key={i}
+                  onClick={() => setActiveBlock(i)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                    activeBlock === i
+                      ? 'bg-blue-600 text-white border-blue-600 shadow'
+                      : hasSelected
+                      ? 'bg-blue-50 text-blue-700 border-blue-300'
+                      : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400 hover:text-blue-600'
+                  }`}
+                >
+                  {from.toLocaleString('es-MX')} – {to.toLocaleString('es-MX')}
+                  {hasSelected && <span className="ml-1 w-1.5 h-1.5 rounded-full bg-blue-400 inline-block" />}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {/* Grid */}
         <div className="bg-white rounded-xl border border-gray-200 p-3">
           {loading ? (
@@ -592,7 +590,6 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
               Cargando boletos...
             </div>
           ) : searchResults ? (
-            // Modo búsqueda: grilla simple con resultados
             <div>
               {searchResults.length === 0 ? (
                 <p className="text-center py-8 text-gray-400 text-sm">No se encontró el número</p>
@@ -602,36 +599,21 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
                 </div>
               )}
               <p className="text-xs text-gray-400 mt-3 text-center">
-                Mostrando resultados para "{searchNumber}". Borra la búsqueda para ver el grid completo.
+                Resultados para "{searchNumber}". Borra la búsqueda para ver el grid completo.
               </p>
             </div>
           ) : (
-            // Modo normal: virtual scroll
-            <div
-              ref={gridRef}
-              style={{ height: 560, overflowY: 'auto', overflowX: 'hidden' }}
-              className="relative"
-            >
-              {/* Espaciador total para dar altura al scroll */}
-              <div style={{ height: totalGridH, position: 'relative' }}>
-                {/* Solo renderizamos las filas visibles */}
-                <div style={{ position: 'absolute', top: paddingTop, left: 0, right: 0 }}>
-                  {Array.from({ length: endRow - startRow + 1 }, (_, i) => {
-                    const row = startRow + i;
-                    const nums: number[] = [];
-                    for (let c = 0; c < cols; c++) {
-                      const n = row * cols + c + 1;
-                      if (n <= raffle.total_tickets) nums.push(n);
-                    }
-                    return (
-                      <div key={row} style={{ display: 'flex', gap: GAP, marginBottom: GAP, height: CELL_H }}>
-                        {nums.map(renderTicketButton)}
-                      </div>
-                    );
-                  })}
+            // Bloque activo: solo 500 boletos a la vez
+            (() => {
+              const from = activeBlock * BLOCK_SIZE + 1;
+              const to   = Math.min((activeBlock + 1) * BLOCK_SIZE, raffle.total_tickets);
+              const nums = Array.from({ length: to - from + 1 }, (_, i) => from + i);
+              return (
+                <div className="flex flex-wrap gap-2">
+                  {nums.map(renderTicketButton)}
                 </div>
-              </div>
-            </div>
+              );
+            })()
           )}
         </div>
 
@@ -722,5 +704,4 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
 };
 
 export default TicketGrid;
-
 
