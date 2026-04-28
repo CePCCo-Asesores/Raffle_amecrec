@@ -49,7 +49,8 @@ const CreateRaffleForm: React.FC<CreateRaffleFormProps> = ({ onBack, onCreated }
   // Form state
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [imageUrl, setImageUrl] = useState('');
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [uploadingIdx, setUploadingIdx] = useState<number | null>(null);
   const [pricePerTicket, setPricePerTicket] = useState('');
   const [totalTickets, setTotalTickets] = useState('');
   const [salesCloseDate, setSalesCloseDate] = useState('');
@@ -99,7 +100,8 @@ const CreateRaffleForm: React.FC<CreateRaffleFormProps> = ({ onBack, onCreated }
         organizer_id: user.id,
         name,
         description,
-        image_url: imageUrl || null,
+        image_url: imageUrls[0] || null,
+        image_urls: imageUrls,
         price_per_ticket: parseFloat(pricePerTicket),
         total_tickets: parseInt(totalTickets),
         sales_close_date: new Date(salesCloseDate).toISOString(),
@@ -391,16 +393,42 @@ const CreateRaffleForm: React.FC<CreateRaffleFormProps> = ({ onBack, onCreated }
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">URL de imagen o banner (opcional)</label>
-              <div className="relative">
-                <Image className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="url"
-                  value={imageUrl}
-                  onChange={e => setImageUrl(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="https://ejemplo.com/imagen.jpg"
-                />
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Fotos del producto <span className="text-gray-400 font-normal">(hasta 3)</span>
+              </label>
+              <div className="space-y-2">
+                {[0, 1, 2].map(idx => (
+                  <div key={idx} className="flex items-center gap-2">
+                    {imageUrls[idx] ? (
+                      <img src={imageUrls[idx]} alt={`Foto ${idx + 1}`}
+                        className="w-10 h-10 rounded-lg object-cover border border-gray-200 flex-shrink-0" />
+                    ) : (
+                      <div className="w-10 h-10 rounded-lg border-2 border-dashed border-gray-200 flex items-center justify-center flex-shrink-0">
+                        <Image className="w-4 h-4 text-gray-300" />
+                      </div>
+                    )}
+                    <input
+                      type="url"
+                      className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      value={imageUrls[idx] || ''}
+                      onChange={e => {
+                        const next = [...imageUrls];
+                        next[idx] = e.target.value;
+                        while (next.length > 0 && !next[next.length - 1]) next.pop();
+                        setImageUrls(next);
+                      }}
+                      placeholder={idx === 0 ? 'URL foto principal' : `URL foto ${idx + 1} (opcional)`}
+                    />
+                    {imageUrls[idx] && (
+                      <button type="button"
+                        onClick={() => { const next = [...imageUrls]; next.splice(idx, 1); setImageUrls(next); }}
+                        className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0">
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <p className="text-xs text-gray-400">Pega URLs de imágenes (jpg, png, webp). La primera es la principal.</p>
               </div>
             </div>
 
@@ -724,11 +752,6 @@ const CreateRaffleForm: React.FC<CreateRaffleFormProps> = ({ onBack, onCreated }
 };
 
 export default CreateRaffleForm;
-
-
-
-
-
 
 
 
