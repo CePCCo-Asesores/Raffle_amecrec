@@ -202,9 +202,13 @@ const RaffleExplorer: React.FC<RaffleExplorerProps> = ({ onSelectRaffle }) => {
                     className="bg-white rounded-2xl border border-gray-200 overflow-hidden hover:shadow-xl transition-all duration-300 cursor-pointer group"
                   >
                     <div className={`h-40 bg-gradient-to-br ${gradients[idx % gradients.length]} relative overflow-hidden`}>
-                      {raffle.image_url ? (
-                        <img src={raffle.image_url} alt={raffle.name} className="w-full h-full object-cover" />
-                      ) : (
+                      {(() => {
+                        const photos = (raffle as any).image_urls?.filter(Boolean) ||
+                                       (raffle.image_url ? [raffle.image_url] : []);
+                        return photos.length > 0
+                          ? <img src={photos[0]} alt={raffle.name} className="w-full h-full object-cover" />
+                          : null;
+                      })() || (
                         <div className="absolute inset-0 flex items-center justify-center">
                           <Trophy className="w-16 h-16 text-white/30" />
                         </div>
