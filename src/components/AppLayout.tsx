@@ -16,6 +16,36 @@ import RaffleExplorer from '@/components/participant/RaffleExplorer';
 import TicketGrid from '@/components/participant/TicketGrid';
 import NotificationPreferencesPage from '@/components/settings/NotificationPreferences';
 
+class ErrorBoundary extends React.Component<{children: React.ReactNode}, {error: string | null}> {
+  constructor(props: any) {
+    super(props);
+    this.state = { error: null };
+  }
+  static getDerivedStateFromError(error: any) {
+    return { error: error?.message ?? String(error) };
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gray-50 p-8">
+          <div className="max-w-lg w-full bg-white rounded-2xl border border-red-200 p-6 text-center">
+            <div className="text-4xl mb-4">⚠️</div>
+            <h2 className="text-lg font-bold text-gray-900 mb-2">Error en la aplicación</h2>
+            <pre className="text-xs text-red-600 bg-red-50 rounded-lg p-3 text-left overflow-auto mb-4">
+              {this.state.error}
+            </pre>
+            <button onClick={() => { this.setState({ error: null }); window.location.reload(); }}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium">
+              Recargar
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 const AppLayout: React.FC = () => {
   const {
     currentView,
@@ -195,7 +225,7 @@ const AppLayout: React.FC = () => {
       )}
 
       {/* Main Content */}
-      {renderView()}
+      <ErrorBoundary>{renderView()}</ErrorBoundary>
 
       {/* Auth Modal */}
       <AuthModal
