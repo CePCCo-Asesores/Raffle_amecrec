@@ -466,10 +466,61 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
         {/* Info rifa */}
         <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6 shadow-sm">
           <div className="flex flex-col lg:flex-row gap-6">
-            <div className="w-full lg:w-64 h-40 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-xl flex items-center justify-center flex-shrink-0">
-              {raffle.image_url
-                ? <img src={raffle.image_url} alt={raffle.name} className="w-full h-full object-cover rounded-xl" />
-                : <Trophy className="w-16 h-16 text-blue-400" />}
+            {/* Carrusel de fotos */}
+            <div className="w-full lg:w-64 flex-shrink-0">
+              {(() => {
+                const photos = (raffle as any).image_urls?.filter(Boolean) ||
+                               (raffle.image_url ? [raffle.image_url] : []);
+                if (photos.length === 0) return (
+                  <div className="w-full h-40 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-xl flex items-center justify-center">
+                    <Trophy className="w-16 h-16 text-blue-400" />
+                  </div>
+                );
+                return (
+                  <div className="relative">
+                    {/* Foto activa */}
+                    <div className="w-full h-48 rounded-xl overflow-hidden bg-gray-100">
+                      <img
+                        src={photos[activePhoto]}
+                        alt={`${raffle.name} foto ${activePhoto + 1}`}
+                        className="w-full h-full object-cover transition-opacity duration-300"
+                      />
+                    </div>
+                    {/* Flechas — solo si hay más de 1 foto */}
+                    {photos.length > 1 && (
+                      <>
+                        <button
+                          onClick={() => setActivePhoto(p => (p - 1 + photos.length) % photos.length)}
+                          className="absolute left-2 top-1/2 -translate-y-1/2 w-7 h-7 bg-black/40 hover:bg-black/60 text-white rounded-full flex items-center justify-center text-sm transition-colors"
+                        >‹</button>
+                        <button
+                          onClick={() => setActivePhoto(p => (p + 1) % photos.length)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 bg-black/40 hover:bg-black/60 text-white rounded-full flex items-center justify-center text-sm transition-colors"
+                        >›</button>
+                        {/* Dots */}
+                        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5">
+                          {photos.map((_: string, i: number) => (
+                            <button
+                              key={i}
+                              onClick={() => setActivePhoto(i)}
+                              className={`w-1.5 h-1.5 rounded-full transition-all ${i === activePhoto ? 'bg-white scale-125' : 'bg-white/50'}`}
+                            />
+                          ))}
+                        </div>
+                        {/* Miniaturas */}
+                        <div className="flex gap-1.5 mt-2">
+                          {photos.map((url: string, i: number) => (
+                            <button key={i} onClick={() => setActivePhoto(i)}
+                              className={`flex-1 h-12 rounded-lg overflow-hidden border-2 transition-all ${i === activePhoto ? 'border-blue-500' : 'border-transparent opacity-60 hover:opacity-100'}`}>
+                              <img src={url} alt={`miniatura ${i+1}`} className="w-full h-full object-cover" />
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
             <div className="flex-1">
               <div className="flex items-start justify-between gap-4 mb-4">
