@@ -73,15 +73,15 @@ const RaffleExplorer: React.FC<RaffleExplorerProps> = ({ onSelectRaffle }) => {
     }
   };
 
-  // Loading skeleton
-  if (loading) {
-    const getRafflePhoto = (r: any): string | null => {
+  const getRafflePhoto = (r: any): string | null => {
     const urls = Array.isArray(r.image_urls) ? r.image_urls.filter(Boolean) : [];
     if (urls.length > 0) return urls[0];
     if (r.image_url) return r.image_url;
     return null;
   };
 
+  // Loading skeleton
+  if (loading) {
   return (
       <div className="min-h-screen bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
