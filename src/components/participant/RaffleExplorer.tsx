@@ -75,7 +75,14 @@ const RaffleExplorer: React.FC<RaffleExplorerProps> = ({ onSelectRaffle }) => {
 
   // Loading skeleton
   if (loading) {
-    return (
+    const getRafflePhoto = (r: any): string | null => {
+    const urls = Array.isArray(r.image_urls) ? r.image_urls.filter(Boolean) : [];
+    if (urls.length > 0) return urls[0];
+    if (r.image_url) return r.image_url;
+    return null;
+  };
+
+  return (
       <div className="min-h-screen bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="mb-8">
@@ -202,13 +209,9 @@ const RaffleExplorer: React.FC<RaffleExplorerProps> = ({ onSelectRaffle }) => {
                     className="bg-white rounded-2xl border border-gray-200 overflow-hidden hover:shadow-xl transition-all duration-300 cursor-pointer group"
                   >
                     <div className={`h-40 bg-gradient-to-br ${gradients[idx % gradients.length]} relative overflow-hidden`}>
-                      {(() => {
-                        const photos = (raffle as any).image_urls?.filter(Boolean) ||
-                                       (raffle.image_url ? [raffle.image_url] : []);
-                        return photos.length > 0
-                          ? <img src={photos[0]} alt={raffle.name} className="w-full h-full object-cover" />
-                          : null;
-                      })() || (
+                      {getRafflePhoto(raffle) ? (
+                        <img src={getRafflePhoto(raffle)!} alt={raffle.name} className="w-full h-full object-cover" />
+                      ) : (
                         <div className="absolute inset-0 flex items-center justify-center">
                           <Trophy className="w-16 h-16 text-white/30" />
                         </div>
