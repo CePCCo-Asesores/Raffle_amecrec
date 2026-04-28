@@ -59,6 +59,7 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
   const [purchaseErrors, setPurchaseErrors]   = useState<string[]>([]);
   const [stripeRedirecting, setStripeRedirecting] = useState(false);
   const [paymentVerified, setPaymentVerified] = useState(false);
+  const [activePhoto, setActivePhoto]         = useState(0);
   const [reservingTicket, setReservingTicket] = useState<number | null>(null);
   const [conflictTickets, setConflictTickets] = useState<number[]>([]);
   const [lastRefresh, setLastRefresh]         = useState(new Date());
