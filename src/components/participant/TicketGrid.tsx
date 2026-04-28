@@ -565,32 +565,87 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
           </div>
         </div>
 
-        {/* Selector de bloque — solo si hay más de 500 boletos */}
-        {totalBlocks > 1 && !searchResults && (
-          <div className="mb-3 flex flex-wrap gap-2">
-            {Array.from({ length: totalBlocks }, (_, i) => {
-              const from = START + i * BLOCK_SIZE;
-              const to   = Math.min(START + (i + 1) * BLOCK_SIZE - 1, START + raffle.total_tickets - 1);
-              const hasSelected = selectedTickets.some(n => n >= from && n <= to);
-              return (
+        {/* Paginador de bloques con flechas ‹ 1 2 3 … › */}
+        {totalBlocks > 1 && !searchResults && (() => {
+          const VISIBLE = 5; // páginas visibles a cada lado del activo
+          const half = Math.floor(VISIBLE / 2);
+          let pageStart = Math.max(0, activeBlock - half);
+          let pageEnd   = Math.min(totalBlocks - 1, pageStart + VISIBLE - 1);
+          if (pageEnd - pageStart < VISIBLE - 1) pageStart = Math.max(0, pageEnd - VISIBLE + 1);
+          const pages: (number | '...')[] = [];
+          if (pageStart > 0) { pages.push(0); if (pageStart > 1) pages.push('...'); }
+          for (let i = pageStart; i <= pageEnd; i++) pages.push(i);
+          if (pageEnd < totalBlocks - 1) { if (pageEnd < totalBlocks - 2) pages.push('...'); pages.push(totalBlocks - 1); }
+
+          const from = START + activeBlock * BLOCK_SIZE;
+          const to   = Math.min(START + (activeBlock + 1) * BLOCK_SIZE - 1, START + raffle.total_tickets - 1);
+
+          return (
+            <div className="mb-3">
+              {/* Rango actual */}
+              <div className="text-xs text-gray-500 text-center mb-2">
+                Mostrando boletos{' '}
+                <span className="font-semibold text-gray-700">
+                  {from.toString().padStart((START + raffle.total_tickets - 1).toString().length, '0')}
+                  {' – '}
+                  {to.toString().padStart((START + raffle.total_tickets - 1).toString().length, '0')}
+                </span>
+                {' '}de{' '}
+                <span className="font-semibold text-gray-700">{(START + raffle.total_tickets - 1).toLocaleString('es-MX')}</span>
+              </div>
+
+              {/* Controles de paginación */}
+              <div className="flex items-center justify-center gap-1">
+                {/* Flecha izquierda */}
                 <button
-                  key={i}
-                  onClick={() => setActiveBlock(i)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-                    activeBlock === i
-                      ? 'bg-blue-600 text-white border-blue-600 shadow'
-                      : hasSelected
-                      ? 'bg-blue-50 text-blue-700 border-blue-300'
-                      : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400 hover:text-blue-600'
-                  }`}
+                  onClick={() => setActiveBlock(b => Math.max(0, b - 1))}
+                  disabled={activeBlock === 0}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-300 text-gray-600 hover:border-blue-400 hover:text-blue-600 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                 >
-                  {from.toLocaleString('es-MX')} – {to.toLocaleString('es-MX')}
-                  {hasSelected && <span className="ml-1 w-1.5 h-1.5 rounded-full bg-blue-400 inline-block" />}
+                  ‹
                 </button>
-              );
-            })}
-          </div>
-        )}
+
+                {pages.map((p, idx) =>
+                  p === '...' ? (
+                    <span key={`ellipsis-${idx}`} className="w-8 text-center text-gray-400 text-sm">…</span>
+                  ) : (
+                    <button
+                      key={p}
+                      onClick={() => setActiveBlock(p as number)}
+                      className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-bold border transition-all ${
+                        activeBlock === p
+                          ? 'bg-blue-600 text-white border-blue-600 shadow'
+                          : selectedTickets.some(n => {
+                              const bf = START + (p as number) * BLOCK_SIZE;
+                              const bt = Math.min(START + ((p as number) + 1) * BLOCK_SIZE - 1, START + raffle.total_tickets - 1);
+                              return n >= bf && n <= bt;
+                            })
+                          ? 'bg-blue-50 text-blue-700 border-blue-300'
+                          : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400 hover:text-blue-600'
+                      }`}
+                    >
+                      {(p as number) + 1}
+                      {selectedTickets.some(n => {
+                        const bf = START + (p as number) * BLOCK_SIZE;
+                        const bt = Math.min(START + ((p as number) + 1) * BLOCK_SIZE - 1, START + raffle.total_tickets - 1);
+                        return n >= bf && n <= bt;
+                      }) && <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-blue-400 border border-white" />}
+                    </button>
+                  )
+                )}
+
+                {/* Flecha derecha */}
+                <button
+                  onClick={() => setActiveBlock(b => Math.min(totalBlocks - 1, b + 1))}
+                  disabled={activeBlock === totalBlocks - 1}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-300 text-gray-600 hover:border-blue-400 hover:text-blue-600 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                >
+                  ›
+                </button>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Grid */}
         <div className="bg-white rounded-xl border border-gray-200 p-3">
@@ -706,8 +761,3 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
 };
 
 export default TicketGrid;
-
-
-
-
-
