@@ -58,6 +58,23 @@ const AppLayout: React.FC = () => {
   } = useAppContext();
   const { user, isAuthenticated, loading } = useAuth();
 
+  const isEmbedded = React.useMemo(() => {
+    try {
+      if (new URLSearchParams(window.location.search).get('embed') === 'true') return true;
+      return window.self !== window.top;
+    } catch {
+      return true;
+    }
+  }, []);
+
+  // En modo embed, saltar la landing page y mostrar el explorador directamente
+  useEffect(() => {
+    if (isEmbedded && !loading && currentView === 'landing') {
+      navigateTo('raffle-explorer');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEmbedded, loading]);
+
   // Redirección al dashboard cuando el usuario inicia sesión desde landing
   useEffect(() => {
     if (!isAuthenticated || !user || currentView !== 'landing') return;
@@ -205,8 +222,8 @@ const AppLayout: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Navbar */}
-      {currentView !== 'landing' && (
+      {/* Navbar — oculto en modo embed */}
+      {!isEmbedded && currentView !== 'landing' && (
         <Navbar
           currentView={currentView}
           onNavigate={navigateTo}
@@ -214,7 +231,7 @@ const AppLayout: React.FC = () => {
         />
       )}
 
-      {currentView === 'landing' && (
+      {!isEmbedded && currentView === 'landing' && (
         <div className="sticky top-0 z-40">
           <Navbar
             currentView={currentView}
