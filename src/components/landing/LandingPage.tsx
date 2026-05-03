@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabase';
 import {
   Trophy, Shield, Zap, Users, CreditCard, BarChart3, Clock, Globe, Bell,
   CheckCircle2, ArrowRight, Star, Lock, Smartphone, TrendingUp,
@@ -10,7 +11,60 @@ interface LandingPageProps {
   onExplore: () => void;
 }
 
+interface PlanDB {
+  id: string;
+  name: string;
+  description: string;
+  price_monthly: number;
+  max_active_raffles: number;
+  max_tickets_per_raffle: number;
+  features: string[];
+  is_active: boolean;
+}
+
+const DEFAULT_PLANS = [
+  {
+    name: 'Básico', price: '$299', period: '/mes', desc: 'Ideal para empezar',
+    features: ['3 sorteos activos', 'Hasta 500 boletos por sorteo', 'Soporte por email', 'Reportes básicos', 'Método de pago externo'],
+    cta: 'Comenzar', popular: false,
+  },
+  {
+    name: 'Profesional', price: '$599', period: '/mes', desc: 'Para organizadores serios',
+    features: ['10 sorteos activos', 'Hasta 2,000 boletos por sorteo', 'Soporte prioritario', 'Reportes avanzados', 'Stripe Connect'],
+    cta: 'Elegir Profesional', popular: true,
+  },
+  {
+    name: 'Empresarial', price: '$999', period: '/mes', desc: 'Sin límites',
+    features: ['Sorteos ilimitados', 'Hasta 10,000 boletos', 'Soporte 24/7', 'Reportes premium', 'API de acceso'],
+    cta: 'Contactar Ventas', popular: false,
+  },
+];
+
 const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onExplore }) => {
+  const [dbPlans, setDbPlans] = useState<PlanDB[]>([]);
+
+  useEffect(() => {
+    supabase
+      .from('subscription_plans')
+      .select('*')
+      .eq('is_active', true)
+      .order('price_monthly', { ascending: true })
+      .then(({ data }) => { if (data && data.length > 0) setDbPlans(data); });
+  }, []);
+
+  // Construir planes: desde DB si existen, si no usar defaults
+  const plans = dbPlans.length > 0
+    ? dbPlans.map((p, i) => ({
+        name: p.name,
+        price: `$${Math.round(p.price_monthly).toLocaleString('es-MX')}`,
+        period: '/mes',
+        desc: p.description || '',
+        features: Array.isArray(p.features) ? p.features : [],
+        cta: i === 0 ? 'Comenzar' : i === dbPlans.length - 1 ? 'Contactar Ventas' : `Elegir ${p.name}`,
+        popular: i === Math.floor(dbPlans.length / 2), // el del medio es popular
+      }))
+    : DEFAULT_PLANS;
+
   const features = [
     { icon: <Ticket className="w-6 h-6" />, title: 'Sorteos Ilimitados', desc: 'Crea y gestiona múltiples sorteos simultáneos con total control sobre cada uno.' },
     { icon: <Shield className="w-6 h-6" />, title: 'Seguridad Total', desc: 'Compra atómica de boletos, bloqueo FOR UPDATE y protección contra duplicados.' },
@@ -24,36 +78,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onExplore }) => {
     { icon: <FileText className="w-6 h-6" />, title: 'Exportación', desc: 'Exporta reportes en CSV y PDF para llevar control detallado de tus sorteos.' },
     { icon: <ShieldCheck className="w-6 h-6" />, title: 'Anti-Automatización', desc: 'Rate limiting y límites por usuario para prevenir compras masivas por script.' },
     { icon: <BookOpen className="w-6 h-6" />, title: 'Auditoría Completa', desc: 'Registro de cada cambio en sorteos, precios, resultados y comisiones con trazabilidad.' },
-  ];
-
-  const plans = [
-    {
-      name: 'Básico',
-      price: '$299',
-      period: '/mes',
-      desc: 'Ideal para empezar',
-      features: ['3 sorteos activos', 'Hasta 500 boletos por sorteo', 'Soporte por email', 'Reportes básicos', 'Método de pago externo'],
-      cta: 'Comenzar Gratis',
-      popular: false,
-    },
-    {
-      name: 'Profesional',
-      price: '$599',
-      period: '/mes',
-      desc: 'Para organizadores serios',
-      features: ['10 sorteos activos', 'Hasta 2,000 boletos por sorteo', 'Soporte prioritario', 'Reportes avanzados', 'Stripe Connect', 'Exportación CSV/PDF', 'Notificaciones por email'],
-      cta: 'Elegir Profesional',
-      popular: true,
-    },
-    {
-      name: 'Empresarial',
-      price: '$999',
-      period: '/mes',
-      desc: 'Sin límites',
-      features: ['Sorteos ilimitados', 'Hasta 10,000 boletos', 'Soporte 24/7', 'Reportes premium', 'Stripe Connect', 'API de acceso', 'Marca personalizada', 'Gestor dedicado'],
-      cta: 'Contactar Ventas',
-      popular: false,
-    },
   ];
 
   const stats = [
