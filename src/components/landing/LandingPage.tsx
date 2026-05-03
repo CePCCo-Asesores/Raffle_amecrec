@@ -3,7 +3,8 @@ import { supabase } from '@/lib/supabase';
 import {
   Trophy, Shield, Zap, Users, CreditCard, BarChart3, Clock, Globe, Bell,
   CheckCircle2, ArrowRight, Star, Lock, Smartphone, TrendingUp,
-  Ticket, Award, Eye, FileText, Database, ShieldCheck, BookOpen, AlertTriangle
+  Ticket, Award, Eye, FileText, Database, ShieldCheck, BookOpen, AlertTriangle,
+  X, Mail, Phone, MessageCircle
 } from 'lucide-react';
 
 interface LandingPageProps {
@@ -42,6 +43,7 @@ const DEFAULT_PLANS = [
 
 const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onExplore }) => {
   const [dbPlans, setDbPlans] = useState<PlanDB[]>([]);
+  const [modal, setModal] = useState<'contact'|'terms'|'privacy'|'cookies'|'legal'|null>(null);
 
   useEffect(() => {
     supabase
@@ -384,49 +386,192 @@ const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onExplore }) => {
                   <span className="text-[9px] text-gray-500 tracking-wider">PLATAFORMA DE RIFAS</span>
                 </div>
               </div>
-              <p className="text-sm leading-relaxed">Plataforma líder en gestión de sorteos digitales vinculados a Lotería Nacional con seguridad de grado empresarial.</p>
+              <p className="text-sm leading-relaxed">Plataforma de gestión de sorteos digitales vinculados a Lotería Nacional con seguridad de grado empresarial.</p>
             </div>
+
             <div>
               <h4 className="text-white font-semibold mb-4">Plataforma</h4>
               <ul className="space-y-2 text-sm">
                 <li><button onClick={onExplore} className="hover:text-white transition-colors">Explorar Sorteos</button></li>
                 <li><button onClick={() => onOpenAuth('register')} className="hover:text-white transition-colors">Crear Cuenta</button></li>
-                <li><button className="hover:text-white transition-colors">Precios</button></li>
-                <li><button className="hover:text-white transition-colors">API</button></li>
+                <li><button onClick={() => onOpenAuth('login')} className="hover:text-white transition-colors">Iniciar Sesión</button></li>
+                <li>
+                  <a href="#precios" onClick={e => { e.preventDefault(); document.getElementById('precios')?.scrollIntoView({ behavior: 'smooth' }); }}
+                    className="hover:text-white transition-colors">Precios</a>
+                </li>
               </ul>
             </div>
+
             <div>
               <h4 className="text-white font-semibold mb-4">Soporte</h4>
               <ul className="space-y-2 text-sm">
-                <li><button className="hover:text-white transition-colors">Centro de Ayuda</button></li>
-                <li><button className="hover:text-white transition-colors">Documentación</button></li>
-                <li><button className="hover:text-white transition-colors">Contacto</button></li>
-                <li><button className="hover:text-white transition-colors">Estado del Sistema</button></li>
+                <li><button onClick={() => setModal('contact')} className="hover:text-white transition-colors">Contacto</button></li>
               </ul>
             </div>
+
             <div>
               <h4 className="text-white font-semibold mb-4">Legal</h4>
               <ul className="space-y-2 text-sm">
-                <li><button className="hover:text-white transition-colors">Términos de Servicio</button></li>
-                <li><button className="hover:text-white transition-colors">Privacidad</button></li>
-                <li><button className="hover:text-white transition-colors">Cookies</button></li>
-                <li><button className="hover:text-white transition-colors">Aviso Legal</button></li>
+                <li><button onClick={() => setModal('terms')}   className="hover:text-white transition-colors">Términos de Servicio</button></li>
+                <li><button onClick={() => setModal('privacy')} className="hover:text-white transition-colors">Aviso de Privacidad</button></li>
+                <li><button onClick={() => setModal('cookies')} className="hover:text-white transition-colors">Política de Cookies</button></li>
+                <li><button onClick={() => setModal('legal')}   className="hover:text-white transition-colors">Aviso Legal</button></li>
               </ul>
             </div>
           </div>
+
           <div className="border-t border-gray-800 pt-8 flex flex-col sm:flex-row justify-between items-center gap-4">
-            <p className="text-sm">&copy; 2026 Sorteos AMECREC. Todos los derechos reservados.</p>
-            <div className="flex gap-4">
-              <button className="w-9 h-9 bg-gray-800 hover:bg-gray-700 rounded-lg flex items-center justify-center transition-colors">
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M24 4.557c-.883.392-1.832.656-2.828.775 1.017-.609 1.798-1.574 2.165-2.724-.951.564-2.005.974-3.127 1.195-.897-.957-2.178-1.555-3.594-1.555-3.179 0-5.515 2.966-4.797 6.045-4.091-.205-7.719-2.165-10.148-5.144-1.29 2.213-.669 5.108 1.523 6.574-.806-.026-1.566-.247-2.229-.616-.054 2.281 1.581 4.415 3.949 4.89-.693.188-1.452.232-2.224.084.626 1.956 2.444 3.379 4.6 3.419-2.07 1.623-4.678 2.348-7.29 2.04 2.179 1.397 4.768 2.212 7.548 2.212 9.142 0 14.307-7.721 13.995-14.646.962-.695 1.797-1.562 2.457-2.549z"/></svg>
-              </button>
-              <button className="w-9 h-9 bg-gray-800 hover:bg-gray-700 rounded-lg flex items-center justify-center transition-colors">
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
-              </button>
-            </div>
+            <p className="text-sm">&copy; {new Date().getFullYear()} Sorteos AMECREC · AMECREC A.C. · Todos los derechos reservados.</p>
           </div>
         </div>
       </footer>
+
+      {/* ── Modales ────────────────────────────────────────────── */}
+      {modal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+          onClick={() => setModal(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[80vh] overflow-y-auto"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-5 border-b">
+              <h2 className="text-lg font-bold text-gray-900">
+                {modal === 'contact' && 'Contacto'}
+                {modal === 'terms'   && 'Términos de Servicio'}
+                {modal === 'privacy' && 'Aviso de Privacidad'}
+                {modal === 'cookies' && 'Política de Cookies'}
+                {modal === 'legal'   && 'Aviso Legal'}
+              </h2>
+              <button onClick={() => setModal(null)}
+                className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors">
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="p-5">
+
+              {/* ── CONTACTO ── */}
+              {modal === 'contact' && (
+                <div className="space-y-4">
+                  <p className="text-gray-600 text-sm">¿Tienes dudas o necesitas ayuda? Contáctanos por cualquiera de estos medios.</p>
+                  <div className="space-y-3">
+                    <a href="mailto:contacto@alianzaindigo.org"
+                      className="flex items-center gap-3 p-3 rounded-xl border border-gray-200 hover:border-blue-400 hover:bg-blue-50 transition-all group">
+                      <div className="w-9 h-9 bg-blue-100 rounded-lg flex items-center justify-center group-hover:bg-blue-200">
+                        <Mail className="w-4 h-4 text-blue-600" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">Correo electrónico</div>
+                        <div className="text-xs text-gray-500">contacto@alianzaindigo.org</div>
+                      </div>
+                    </a>
+                    <a href="https://wa.me/526572396866" target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-3 p-3 rounded-xl border border-gray-200 hover:border-green-400 hover:bg-green-50 transition-all group">
+                      <div className="w-9 h-9 bg-green-100 rounded-lg flex items-center justify-center group-hover:bg-green-200">
+                        <MessageCircle className="w-4 h-4 text-green-600" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">WhatsApp</div>
+                        <div className="text-xs text-gray-500">+52 657 239 6866 · Lun–Vie 9–18 h</div>
+                      </div>
+                    </a>
+                  </div>
+                  <p className="text-xs text-gray-400 pt-2">Tiempo de respuesta habitual: menos de 24 horas hábiles.</p>
+                </div>
+              )}
+
+              {/* ── TÉRMINOS ── */}
+              {modal === 'terms' && (
+                <div className="prose prose-sm max-w-none text-gray-600 space-y-4">
+                  <p className="text-xs text-gray-400">Última actualización: enero 2026</p>
+                  <h3 className="font-bold text-gray-800">1. Objeto y aceptación</h3>
+                  <p>El uso de la plataforma Sorteos AMECREC implica la aceptación plena de estos Términos de Servicio. Si no los acepta, no utilice el servicio.</p>
+                  <h3 className="font-bold text-gray-800">2. Descripción del servicio</h3>
+                  <p>Sorteos AMECREC es una plataforma digital que permite a organizadores crear y gestionar sorteos vinculados a sorteos oficiales de Lotería Nacional, y a participantes adquirir boletos de manera segura.</p>
+                  <h3 className="font-bold text-gray-800">3. Registro y cuentas</h3>
+                  <p>Para acceder como organizador o participante es necesario crear una cuenta con información veraz. El usuario es responsable de la confidencialidad de sus credenciales.</p>
+                  <h3 className="font-bold text-gray-800">4. Obligaciones del organizador</h3>
+                  <p>El organizador garantiza que los sorteos que publique cumplen con la normativa aplicable en México (SEGOB, SAT) y que los premios ofrecidos existen y serán entregados al ganador verificado.</p>
+                  <h3 className="font-bold text-gray-800">5. Pagos y comisiones</h3>
+                  <p>Los pagos se procesan mediante Stripe Connect o método externo según elección del organizador. AMECREC A.C. retiene una comisión fija por boleto vendido, registrada en el ledger contable de la plataforma.</p>
+                  <h3 className="font-bold text-gray-800">6. Reembolsos</h3>
+                  <p>Los reembolsos aplican únicamente cuando el sorteo es cancelado por el organizador antes de la fecha de sorteo. Los boletos adquiridos en sorteos activos no son reembolsables salvo decisión expresa del organizador.</p>
+                  <h3 className="font-bold text-gray-800">7. Limitación de responsabilidad</h3>
+                  <p>AMECREC A.C. actúa como plataforma tecnológica. La responsabilidad sobre el cumplimiento del premio corresponde exclusivamente al organizador.</p>
+                  <h3 className="font-bold text-gray-800">8. Jurisdicción</h3>
+                  <p>Estos términos se rigen por las leyes de México. Para cualquier controversia las partes se someten a los tribunales competentes de Chihuahua, México.</p>
+                </div>
+              )}
+
+              {/* ── PRIVACIDAD ── */}
+              {modal === 'privacy' && (
+                <div className="prose prose-sm max-w-none text-gray-600 space-y-4">
+                  <p className="text-xs text-gray-400">Última actualización: enero 2026 · Conforme a la LFPDPPP</p>
+                  <h3 className="font-bold text-gray-800">Responsable del tratamiento</h3>
+                  <p>AMECREC A.C., con domicilio en Chihuahua, Chihuahua, México. Contacto de privacidad: contacto@alianzaindigo.org</p>
+                  <h3 className="font-bold text-gray-800">Datos que recopilamos</h3>
+                  <ul className="list-disc pl-4 space-y-1">
+                    <li>Nombre completo y correo electrónico (registro)</li>
+                    <li>Datos de pago procesados por Stripe (no almacenados en nuestros servidores)</li>
+                    <li>Números de boletos adquiridos y transacciones</li>
+                    <li>Dirección IP y datos de navegación (analítica)</li>
+                  </ul>
+                  <h3 className="font-bold text-gray-800">Finalidades</h3>
+                  <ul className="list-disc pl-4 space-y-1">
+                    <li>Gestión de cuentas y autenticación</li>
+                    <li>Procesamiento de compras y reembolsos</li>
+                    <li>Envío de notificaciones relacionadas con sorteos</li>
+                    <li>Cumplimiento de obligaciones fiscales y legales</li>
+                  </ul>
+                  <h3 className="font-bold text-gray-800">Derechos ARCO</h3>
+                  <p>Puede ejercer sus derechos de Acceso, Rectificación, Cancelación y Oposición enviando un correo a contacto@alianzaindigo.org con identificación oficial.</p>
+                  <h3 className="font-bold text-gray-800">Transferencias</h3>
+                  <p>Sus datos no se venden ni transfieren a terceros, excepto a Stripe Inc. para el procesamiento de pagos y a las autoridades competentes cuando la ley lo requiera.</p>
+                </div>
+              )}
+
+              {/* ── COOKIES ── */}
+              {modal === 'cookies' && (
+                <div className="prose prose-sm max-w-none text-gray-600 space-y-4">
+                  <p className="text-xs text-gray-400">Última actualización: enero 2026</p>
+                  <h3 className="font-bold text-gray-800">¿Qué son las cookies?</h3>
+                  <p>Las cookies son pequeños archivos de texto que se almacenan en su dispositivo cuando visita nuestra plataforma.</p>
+                  <h3 className="font-bold text-gray-800">Cookies que utilizamos</h3>
+                  <div className="space-y-2">
+                    {[
+                      { name: 'Sesión (Supabase)', purpose: 'Mantener su sesión iniciada', type: 'Necesaria' },
+                      { name: 'Preferencias', purpose: 'Recordar idioma y configuración', type: 'Funcional' },
+                    ].map(c => (
+                      <div key={c.name} className="bg-gray-50 rounded-lg p-3 text-xs">
+                        <div className="font-medium text-gray-800">{c.name} <span className="text-blue-600">· {c.type}</span></div>
+                        <div className="text-gray-500">{c.purpose}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <h3 className="font-bold text-gray-800">Control de cookies</h3>
+                  <p>Puede desactivar las cookies desde la configuración de su navegador, aunque esto puede afectar la funcionalidad de la plataforma. Las cookies de sesión son necesarias para el funcionamiento del servicio.</p>
+                </div>
+              )}
+
+              {/* ── AVISO LEGAL ── */}
+              {modal === 'legal' && (
+                <div className="prose prose-sm max-w-none text-gray-600 space-y-4">
+                  <h3 className="font-bold text-gray-800">Titular</h3>
+                  <p>AMECREC A.C. — Asociación Civil constituida conforme a las leyes de los Estados Unidos Mexicanos, con domicilio en Chihuahua, Chihuahua.</p>
+                  <h3 className="font-bold text-gray-800">Actividad regulada</h3>
+                  <p>Los sorteos vinculados a Lotería Nacional operan bajo la normativa de la Secretaría de Gobernación (SEGOB). AMECREC A.C. actúa exclusivamente como plataforma tecnológica intermediaria; la organización de cada sorteo es responsabilidad del organizador registrado.</p>
+                  <h3 className="font-bold text-gray-800">Propiedad intelectual</h3>
+                  <p>Todos los elementos de la plataforma (diseño, código, marcas, logotipos) son propiedad de AMECREC A.C. o de sus licenciantes. Queda prohibida su reproducción sin autorización expresa por escrito.</p>
+                  <h3 className="font-bold text-gray-800">Exclusión de garantías</h3>
+                  <p>La plataforma se ofrece "tal cual". AMECREC A.C. no garantiza la disponibilidad ininterrumpida del servicio ni se responsabiliza por pérdidas derivadas de fallas técnicas ajenas a su control.</p>
+                  <h3 className="font-bold text-gray-800">Contacto legal</h3>
+                  <p>contacto@alianzaindigo.org</p>
+                </div>
+              )}
+
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
