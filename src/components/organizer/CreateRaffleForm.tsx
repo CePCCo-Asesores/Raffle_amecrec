@@ -49,8 +49,9 @@ const CreateRaffleForm: React.FC<CreateRaffleFormProps> = ({ onBack, onCreated }
   // Form state
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [imageUrls, setImageUrls] = useState<string[]>([]);
-  const [uploadingIdx, setUploadingIdx] = useState<number | null>(null);
+  const [imageUrls, setImageUrls]         = useState<string[]>([]);
+  const [uploadingIdx, setUploadingIdx]   = useState<number | null>(null);
+  const [uploadErrors, setUploadErrors]   = useState<Record<number, string>>({});
   const [pricePerTicket, setPricePerTicket] = useState('');
   const [totalTickets, setTotalTickets] = useState('');
   const [salesCloseDate, setSalesCloseDate] = useState('');
@@ -211,6 +212,60 @@ const CreateRaffleForm: React.FC<CreateRaffleFormProps> = ({ onBack, onCreated }
 
   const canProceedStep1 = name && pricePerTicket && totalTickets && parseInt(totalTickets) <= maxTicketsPerRaffle;
   const canProceedStep2 = salesCloseDate && drawDate;
+  const uploadImage = async (file: File, idx: number): Promise<void> => {
+    if (!user) return;
+
+    // Validar tipo y tamaño
+    if (!['image/jpeg','image/jpg','image/png','image/webp','image/gif'].includes(file.type)) {
+      setUploadErrors(prev => ({ ...prev, [idx]: 'Solo JPG, PNG, WEBP o GIF' }));
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setUploadErrors(prev => ({ ...prev, [idx]: 'Máximo 5 MB por imagen' }));
+      return;
+    }
+
+    setUploadingIdx(idx);
+    setUploadErrors(prev => { const n = { ...prev }; delete n[idx]; return n; });
+
+    const ext  = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+    const path = `${user.id}/${Date.now()}_${idx}.${ext}`;
+
+    const { error } = await supabase.storage
+      .from('raffle-images')
+      .upload(path, file, { upsert: true, contentType: file.type });
+
+    if (error) {
+      setUploadErrors(prev => ({ ...prev, [idx]: error.message }));
+      setUploadingIdx(null);
+      return;
+    }
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('raffle-images')
+      .getPublicUrl(path);
+
+    const next = [...imageUrls];
+    next[idx] = publicUrl;
+    setImageUrls(next);
+    setUploadingIdx(null);
+  };
+
+  const removeImage = async (idx: number): Promise<void> => {
+    const url = imageUrls[idx];
+    if (url) {
+      // Extraer el path del URL público para eliminarlo del bucket
+      const parts = url.split('/raffle-images/');
+      if (parts[1]) {
+        await supabase.storage.from('raffle-images').remove([parts[1]]);
+      }
+    }
+    const next = [...imageUrls];
+    next.splice(idx, 1);
+    setImageUrls(next);
+    setUploadErrors(prev => { const n = { ...prev }; delete n[idx]; return n; });
+  };
+
   const canProceedStep3 = lotteryType && lotteryDrawDate;
 
   // ============================================================
@@ -394,42 +449,61 @@ const CreateRaffleForm: React.FC<CreateRaffleFormProps> = ({ onBack, onCreated }
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Fotos del producto <span className="text-gray-400 font-normal">(hasta 3)</span>
+                Fotos del producto <span className="text-gray-400 font-normal">(hasta 3 · máx 5 MB c/u)</span>
               </label>
-              <div className="space-y-2">
+              <div className="grid grid-cols-3 gap-3">
                 {[0, 1, 2].map(idx => (
-                  <div key={idx} className="flex items-center gap-2">
-                    {imageUrls[idx] ? (
-                      <img src={imageUrls[idx]} alt={`Foto ${idx + 1}`}
-                        className="w-10 h-10 rounded-lg object-cover border border-gray-200 flex-shrink-0" />
-                    ) : (
-                      <div className="w-10 h-10 rounded-lg border-2 border-dashed border-gray-200 flex items-center justify-center flex-shrink-0">
-                        <Image className="w-4 h-4 text-gray-300" />
-                      </div>
-                    )}
-                    <input
-                      type="url"
-                      className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      value={imageUrls[idx] || ''}
-                      onChange={e => {
-                        const next = [...imageUrls];
-                        next[idx] = e.target.value;
-                        while (next.length > 0 && !next[next.length - 1]) next.pop();
-                        setImageUrls(next);
-                      }}
-                      placeholder={idx === 0 ? 'URL foto principal' : `URL foto ${idx + 1} (opcional)`}
-                    />
+                  <div key={idx} className="flex flex-col gap-1">
+                    {/* Zona de subida / preview */}
+                    <label className={`relative block aspect-square rounded-xl overflow-hidden border-2 cursor-pointer transition-all ${
+                      imageUrls[idx]
+                        ? 'border-blue-400'
+                        : 'border-dashed border-gray-300 hover:border-blue-400 bg-gray-50'
+                    }`}>
+                      {imageUrls[idx] ? (
+                        <img src={imageUrls[idx]} alt={`Foto ${idx + 1}`}
+                          className="w-full h-full object-cover" />
+                      ) : uploadingIdx === idx ? (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-blue-50">
+                          <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                          <span className="text-xs text-blue-600">Subiendo...</span>
+                        </div>
+                      ) : (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-gray-400">
+                          <Image className="w-7 h-7" />
+                          <span className="text-xs text-center px-1">
+                            {idx === 0 ? 'Foto principal' : `Foto ${idx + 1}`}
+                          </span>
+                        </div>
+                      )}
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/jpg,image/png,image/webp,image/gif"
+                        className="absolute inset-0 opacity-0 cursor-pointer"
+                        disabled={uploadingIdx !== null}
+                        onChange={e => {
+                          const file = e.target.files?.[0];
+                          if (file) uploadImage(file, idx);
+                          e.target.value = '';
+                        }}
+                      />
+                    </label>
+                    {/* Botón eliminar */}
                     {imageUrls[idx] && (
                       <button type="button"
-                        onClick={() => { const next = [...imageUrls]; next.splice(idx, 1); setImageUrls(next); }}
-                        className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0">
-                        ✕
+                        onClick={() => removeImage(idx)}
+                        className="text-xs text-red-500 hover:text-red-700 text-center py-0.5">
+                        Eliminar
                       </button>
+                    )}
+                    {/* Error */}
+                    {uploadErrors[idx] && (
+                      <p className="text-xs text-red-500 text-center leading-tight">{uploadErrors[idx]}</p>
                     )}
                   </div>
                 ))}
-                <p className="text-xs text-gray-400">Pega URLs de imágenes (jpg, png, webp). La primera es la principal.</p>
               </div>
+              <p className="text-xs text-gray-400 mt-2">Haz clic en cada recuadro para subir una foto (JPG, PNG, WEBP · máx 5 MB).</p>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
