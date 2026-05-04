@@ -29,7 +29,7 @@ interface OrganizerDashboardProps {
 
 const OrganizerDashboard: React.FC<OrganizerDashboardProps> = ({ onNavigate }) => {
   const { user, updateProfile } = useAuth();
-  const [activeTab, setActiveTab] = useState<'raffles' | 'winner' | 'payments' | 'refunds' | 'disputes' | 'stripe' | 'reports' | 'plan'>('raffles');
+  const [activeTab, setActiveTab] = useState<'raffles' | 'winner' | 'payments' | 'refunds' | 'disputes' | 'ext-payment-setup' | 'stripe' | 'reports' | 'plan'>('raffles');
 
 
   const [raffles, setRaffles] = useState<Raffle[]>([]);
@@ -54,6 +54,9 @@ const OrganizerDashboard: React.FC<OrganizerDashboardProps> = ({ onNavigate }) =
   // Refund management state
   const [refundRequests, setRefundRequests] = useState<RefundRequest[]>([]);
   const [pendingPayments, setPendingPayments] = useState<any[]>([]);
+  const [bankForm, setBankForm]               = useState({ bank_name: '', bank_account: '', bank_holder: '', payment_instructions: '' });
+  const [bankSaving, setBankSaving]           = useState(false);
+  const [bankSaved, setBankSaved]             = useState(false);
   const [pendingPaymentsCount, setPendingPaymentsCount] = useState(0);
   const [processingPayment, setProcessingPayment] = useState<string | null>(null);
   const [paymentOrgNotes, setPaymentOrgNotes] = useState<Record<string, string>>({});
@@ -543,6 +546,7 @@ const OrganizerDashboard: React.FC<OrganizerDashboardProps> = ({ onNavigate }) =
             { id: 'refunds', label: `Reembolsos ${refundStats.pending > 0 ? `(${refundStats.pending})` : ''}`, icon: <RotateCcw className="w-4 h-4" /> },
             { id: 'disputes', label: `Disputas ${activeDisputeCount > 0 ? `(${activeDisputeCount})` : ''}`, icon: <Scale className="w-4 h-4" /> },
             { id: 'winner', label: 'Ganadores', icon: <Trophy className="w-4 h-4" /> },
+            { id: 'ext-payment-setup', label: 'Pago Externo', icon: <Wallet className="w-4 h-4" /> },
             { id: 'stripe', label: 'Stripe Connect', icon: <CreditCard className="w-4 h-4" /> },
             { id: 'reports', label: 'Reportes', icon: <BarChart3 className="w-4 h-4" /> },
 
@@ -1071,6 +1075,73 @@ const OrganizerDashboard: React.FC<OrganizerDashboardProps> = ({ onNavigate }) =
         {/* ============================================================ */}
         {/* STRIPE CONNECT TAB */}
         {/* ============================================================ */}
+        {activeTab === 'ext-payment-setup' && (
+          <div className="max-w-lg">
+            <h3 className="text-lg font-bold text-gray-900 mb-1">Configuración de Pago Externo</h3>
+            <p className="text-sm text-gray-500 mb-6">Estos datos se mostrarán a tus participantes cuando soliciten un boleto con pago externo (transferencia/depósito).</p>
+
+            <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Banco / Institución *</label>
+                <input type="text" value={bankForm.bank_name}
+                  onChange={e => setBankForm(f => ({ ...f, bank_name: e.target.value }))}
+                  placeholder="Ej: BBVA, Banamex, Banorte, OXXO Pay..."
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Número de tarjeta o CLABE *</label>
+                <input type="text" value={bankForm.bank_account}
+                  onChange={e => setBankForm(f => ({ ...f, bank_account: e.target.value }))}
+                  placeholder="Ej: 4152 3141 5926 5358 o CLABE 18 dígitos"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nombre del titular *</label>
+                <input type="text" value={bankForm.bank_holder}
+                  onChange={e => setBankForm(f => ({ ...f, bank_holder: e.target.value }))}
+                  placeholder="Nombre tal como aparece en la tarjeta"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Instrucciones adicionales <span className="text-gray-400 font-normal">(opcional)</span></label>
+                <textarea value={bankForm.payment_instructions}
+                  onChange={e => setBankForm(f => ({ ...f, payment_instructions: e.target.value }))}
+                  placeholder="Ej: Enviar comprobante por WhatsApp al 614-XXX-XXXX después de realizar el depósito."
+                  rows={3}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 resize-none" />
+              </div>
+
+              {bankSaved && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-sm text-emerald-700 flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 flex-shrink-0" /> Datos guardados correctamente.
+                </div>
+              )}
+
+              <button
+                disabled={bankSaving || !bankForm.bank_name || !bankForm.bank_account || !bankForm.bank_holder}
+                onClick={async () => {
+                  setBankSaving(true); setBankSaved(false);
+                  const { error } = await supabase.from('profiles').update({
+                    bank_name:            bankForm.bank_name,
+                    bank_account:         bankForm.bank_account,
+                    bank_holder:          bankForm.bank_holder,
+                    payment_instructions: bankForm.payment_instructions || null,
+                  }).eq('id', user!.id);
+                  if (error) { toast({ title: 'Error', description: error.message, variant: 'destructive' }); }
+                  else { setBankSaved(true); setTimeout(() => setBankSaved(false), 4000); }
+                  setBankSaving(false);
+                }}
+                className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold disabled:opacity-50 flex items-center justify-center gap-2 transition-colors">
+                {bankSaving ? <><Loader2 className="w-4 h-4 animate-spin" /> Guardando...</> : 'Guardar datos bancarios'}
+              </button>
+            </div>
+
+            <div className="mt-4 bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
+              <strong>⚠️ Importante:</strong> Estos datos son visibles para los participantes que intenten comprar con pago externo. Asegúrate de que sean correctos antes de activar un sorteo.
+            </div>
+          </div>
+        )}
+
         {activeTab === 'stripe' && (
           <div className="max-w-2xl">
             <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
@@ -1506,4 +1577,3 @@ const OrganizerDashboard: React.FC<OrganizerDashboardProps> = ({ onNavigate }) =
 };
 
 export default OrganizerDashboard;
-
