@@ -95,13 +95,12 @@ const ParticipantDashboard: React.FC<ParticipantDashboardProps> = ({ onNavigate 
     setPaymentModal({ ticket, request: null, organizer: null });
     setPaymentModalLoading(true);
 
-    // El raffle_id puede venir de ticket.raffle.id (join) o ticket.raffle_id (campo directo)
     const raffleId = ticket.raffle?.id || ticket.raffle_id;
 
-    // 1. Buscar solicitud de pago externo
+    // Una sola query: los datos bancarios ya están guardados en la solicitud
     const { data: req } = await supabase
       .from('external_payment_requests')
-      .select('system_reference, amount_total, status, created_at, payment_reference, organizer_notes')
+      .select('system_reference, amount_total, status, created_at, payment_reference, organizer_notes, bank_name, bank_account, bank_holder, bank_instructions')
       .eq('raffle_id', raffleId)
       .eq('participant_id', user!.id)
       .contains('ticket_numbers', [ticket.ticket_number])
@@ -109,23 +108,13 @@ const ParticipantDashboard: React.FC<ParticipantDashboardProps> = ({ onNavigate 
       .limit(1)
       .maybeSingle();
 
-    // 2. Obtener el organizer_id de la rifa
-    const { data: raffleData } = await supabase
-      .from('raffles')
-      .select('organizer_id')
-      .eq('id', raffleId)
-      .single();
-
-    // 3. Obtener datos bancarios del organizador
-    let organizer = null;
-    if (raffleData?.organizer_id) {
-      const { data: orgData } = await supabase
-        .from('profiles')
-        .select('bank_name, bank_account, bank_holder, payment_instructions')
-        .eq('id', raffleData.organizer_id)
-        .single();
-      organizer = orgData;
-    }
+    // Los datos bancarios vienen embebidos en la solicitud
+    const organizer = req ? {
+      bank_name:            req.bank_name,
+      bank_account:         req.bank_account,
+      bank_holder:          req.bank_holder,
+      payment_instructions: req.bank_instructions,
+    } : null;
 
     setPaymentModal({ ticket, request: req || null, organizer });
     setPaymentModalLoading(false);
