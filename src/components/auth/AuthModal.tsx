@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserRole } from '@/lib/types';
-import { X, Eye, EyeOff, User, Mail, Lock, Phone, Shield, Ticket, Users, MailCheck, RefreshCw } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { X, Eye, EyeOff, User, Mail, Lock, Phone, Shield, Ticket, Users } from 'lucide-react';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -15,11 +14,6 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, defaultTab = 'lo
   const [tab, setTab] = useState<'login' | 'register'>(defaultTab);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-
-  // Pantalla de verificación
-  const [verificationEmail, setVerificationEmail] = useState<string | null>(null);
-  const [resending, setResending] = useState(false);
-  const [resent, setResent] = useState(false);
 
   // Login
   const [loginEmail, setLoginEmail] = useState('');
@@ -48,24 +42,9 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, defaultTab = 'lo
     if (regPassword !== regConfirmPassword) return;
     if (regPassword.length < 6) return;
     setLoading(true);
-    const result = await signUp(regEmail, regPassword, regName, regRole);
+    const success = await signUp(regEmail, regPassword, regName, regRole);
     setLoading(false);
-    if (result.success) {
-      if (result.needsVerification) {
-        setVerificationEmail(result.email || regEmail);
-      } else {
-        onClose();
-      }
-    }
-  };
-
-  const handleResendEmail = async () => {
-    if (!verificationEmail) return;
-    setResending(true);
-    await supabase.auth.resend({ type: 'signup', email: verificationEmail });
-    setResending(false);
-    setResent(true);
-    setTimeout(() => setResent(false), 5000);
+    if (success) onClose();
   };
 
   const roleOptions: { value: UserRole; label: string; desc: string; icon: React.ReactNode }[] = [
@@ -84,84 +63,29 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, defaultTab = 'lo
           </button>
           <div className="flex items-center gap-3 mb-4">
             <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
-              {verificationEmail ? <MailCheck className="w-5 h-5 text-white" /> : <Shield className="w-5 h-5 text-white" />}
+              <Shield className="w-5 h-5 text-white" />
             </div>
             <div>
               <h2 className="text-xl font-bold text-white">Sorteos AMECREC</h2>
-              <p className="text-blue-200 text-sm">
-                {verificationEmail ? 'Verifica tu correo' : 'Plataforma de Sorteos Digitales'}
-              </p>
+              <p className="text-blue-200 text-sm">Plataforma de Sorteos Digitales</p>
             </div>
           </div>
-          {!verificationEmail && (
-            <div className="flex bg-white/10 rounded-lg p-1">
-              <button onClick={() => setTab('login')}
-                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${tab === 'login' ? 'bg-white text-blue-900 shadow-sm' : 'text-white/80 hover:text-white'}`}>
-                Iniciar Sesión
-              </button>
-              <button onClick={() => setTab('register')}
-                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${tab === 'register' ? 'bg-white text-blue-900 shadow-sm' : 'text-white/80 hover:text-white'}`}>
-                Registrarse
-              </button>
-            </div>
-          )}
+          <div className="flex bg-white/10 rounded-lg p-1">
+            <button onClick={() => setTab('login')}
+              className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${tab === 'login' ? 'bg-white text-blue-900 shadow-sm' : 'text-white/80 hover:text-white'}`}>
+              Iniciar Sesión
+            </button>
+            <button onClick={() => setTab('register')}
+              className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${tab === 'register' ? 'bg-white text-blue-900 shadow-sm' : 'text-white/80 hover:text-white'}`}>
+              Registrarse
+            </button>
+          </div>
         </div>
 
         {/* Body */}
         <div className="p-6">
 
-          {/* ── PANTALLA DE VERIFICACIÓN ── */}
-          {verificationEmail ? (
-            <div className="text-center space-y-5">
-              <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mx-auto">
-                <MailCheck className="w-10 h-10 text-blue-500" />
-              </div>
-
-              <div>
-                <h3 className="text-xl font-bold text-gray-900 mb-2">Revisa tu correo</h3>
-                <p className="text-gray-600 text-sm leading-relaxed">
-                  Enviamos un enlace de verificación a:
-                </p>
-                <p className="font-semibold text-blue-700 text-sm mt-1 break-all">{verificationEmail}</p>
-              </div>
-
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-left space-y-2">
-                <p className="text-sm font-semibold text-amber-800">📧 ¿Qué debes hacer?</p>
-                <ol className="text-sm text-amber-700 space-y-1 list-decimal list-inside">
-                  <li>Abre tu bandeja de entrada (o spam)</li>
-                  <li>Busca un correo de <strong>Sorteos AMECREC</strong></li>
-                  <li>Haz clic en el enlace <strong>"Confirmar correo"</strong></li>
-                  <li>Vuelve aquí e inicia sesión</li>
-                </ol>
-              </div>
-
-              {resent && (
-                <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-sm text-emerald-700 flex items-center gap-2">
-                  <MailCheck className="w-4 h-4 flex-shrink-0" /> Correo reenviado correctamente.
-                </div>
-              )}
-
-              <div className="space-y-3 pt-2">
-                <button
-                  onClick={handleResendEmail}
-                  disabled={resending || resent}
-                  className="w-full py-2.5 border border-blue-300 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-50 disabled:opacity-50 flex items-center justify-center gap-2 transition-colors"
-                >
-                  {resending ? <><RefreshCw className="w-4 h-4 animate-spin" /> Reenviando...</> : '📨 Reenviar correo de verificación'}
-                </button>
-                <button
-                  onClick={() => { setVerificationEmail(null); setTab('login'); }}
-                  className="w-full py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg text-sm font-medium hover:from-blue-700 hover:to-indigo-700 transition-all"
-                >
-                  Ya verifiqué — Iniciar sesión
-                </button>
-                <button onClick={onClose} className="w-full text-xs text-gray-400 hover:text-gray-600 py-1">
-                  Cerrar
-                </button>
-              </div>
-            </div>
-
-          ) : tab === 'login' ? (
+          {tab === 'login' ? (
             /* ── LOGIN ── */
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
