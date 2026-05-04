@@ -20,6 +20,8 @@ interface ParticipantDashboardProps {
 const ParticipantDashboard: React.FC<ParticipantDashboardProps> = ({ onNavigate }) => {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'tickets' | 'history' | 'refunds' | 'disputes' | 'notifications'>('tickets');
+  const [paymentModal, setPaymentModal]       = useState<any | null>(null);
+  const [paymentModalLoading, setPaymentModalLoading] = useState(false);
   const [myTickets, setMyTickets] = useState<(Ticket & { raffle?: Raffle })[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
@@ -87,6 +89,32 @@ const ParticipantDashboard: React.FC<ParticipantDashboardProps> = ({ onNavigate 
   const markNotificationRead = async (id: string) => {
     await supabase.from('notifications').update({ is_read: true }).eq('id', id);
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+  };
+
+  const openPaymentModal = async (ticket: any) => {
+    setPaymentModal({ ticket, request: null, organizer: null });
+    setPaymentModalLoading(true);
+
+    // Buscar la solicitud de pago externo de este boleto
+    const { data: req } = await supabase
+      .from('external_payment_requests')
+      .select('system_reference, amount_total, status, created_at, payment_reference')
+      .eq('raffle_id', ticket.raffle_id || ticket.raffle?.id)
+      .eq('participant_id', user!.id)
+      .contains('ticket_numbers', [ticket.ticket_number])
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    // Buscar datos bancarios del organizador
+    const { data: org } = await supabase
+      .from('raffles')
+      .select('organizer:organizer_id(bank_name, bank_account, bank_holder, payment_instructions)')
+      .eq('id', ticket.raffle_id || ticket.raffle?.id)
+      .single();
+
+    setPaymentModal({ ticket, request: req || null, organizer: (org?.organizer as any) || null });
+    setPaymentModalLoading(false);
   };
 
   const openRefundModal = (ticket: Ticket & { raffle?: Raffle }) => {
@@ -308,7 +336,19 @@ const ParticipantDashboard: React.FC<ParticipantDashboardProps> = ({ onNavigate 
                   return (
                     <div key={ticket.id} className="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md transition-shadow">
                       <div className="flex items-center gap-4">
-                        <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center text-white font-bold text-lg">
+                        <div
+                          onClick={() => {
+                            if (ticket.payment_method === 'external' || ticket.status === 'pending_payment') {
+                              openPaymentModal(ticket);
+                            }
+                          }}
+                          className={`w-14 h-14 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center text-white font-bold text-lg flex-shrink-0 ${
+                            ticket.payment_method === 'external' || ticket.status === 'pending_payment'
+                              ? 'cursor-pointer hover:from-blue-600 hover:to-indigo-700 active:scale-95 transition-all'
+                              : ''
+                          }`}
+                          title={ticket.payment_method === 'external' || ticket.status === 'pending_payment' ? 'Ver referencia de pago' : undefined}
+                        >
                           #{ticket.ticket_number}
                         </div>
                         <div className="flex-1 min-w-0">
@@ -820,6 +860,106 @@ const ParticipantDashboard: React.FC<ParticipantDashboardProps> = ({ onNavigate 
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+      {/* Modal de referencia de pago */}
+      {paymentModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          onClick={() => setPaymentModal(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b">
+              <h3 className="font-bold text-gray-900">Referencia de pago — #{paymentModal.ticket?.ticket_number}</h3>
+              <button onClick={() => setPaymentModal(null)} className="p-1 hover:bg-gray-100 rounded-lg">
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            <div className="p-4 space-y-3">
+              {paymentModalLoading ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+                </div>
+              ) : (
+                <>
+                  {/* Referencia del sistema */}
+                  {paymentModal.request?.system_reference ? (
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                      <p className="text-xs text-blue-600 font-semibold uppercase tracking-wide mb-1">Tu referencia de pago</p>
+                      <p className="font-mono font-bold text-blue-900 text-lg tracking-widest break-all">
+                        {paymentModal.request.system_reference}
+                      </p>
+                      <p className="text-xs text-blue-600 mt-1">Incluye esta referencia en tu transferencia o depósito.</p>
+                    </div>
+                  ) : (
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-500 text-center">
+                      No se encontró referencia para este boleto.
+                    </div>
+                  )}
+
+                  {/* Estado de la solicitud */}
+                  {paymentModal.request && (
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-gray-500">Estado del pago</span>
+                      <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${
+                        paymentModal.request.status === 'confirmed' ? 'bg-emerald-100 text-emerald-700' :
+                        paymentModal.request.status === 'rejected'  ? 'bg-red-100 text-red-700' :
+                        paymentModal.request.status === 'expired'   ? 'bg-gray-100 text-gray-600' :
+                        'bg-amber-100 text-amber-700'
+                      }`}>
+                        {paymentModal.request.status === 'confirmed' ? '✅ Confirmado' :
+                         paymentModal.request.status === 'rejected'  ? '❌ Rechazado' :
+                         paymentModal.request.status === 'expired'   ? 'Expirado' :
+                         '⏳ Pendiente de confirmación'}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Monto */}
+                  {paymentModal.request?.amount_total && (
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-gray-500">Total a depositar</span>
+                      <span className="font-bold text-gray-900">${paymentModal.request.amount_total.toLocaleString('es-MX')} MXN</span>
+                    </div>
+                  )}
+
+                  {/* Datos bancarios del organizador */}
+                  {paymentModal.organizer?.bank_account && (
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-2">
+                      <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Datos para depósito</p>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <p className="text-gray-400">Banco</p>
+                          <p className="font-medium text-gray-900">{paymentModal.organizer.bank_name || '—'}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-400">Titular</p>
+                          <p className="font-medium text-gray-900">{paymentModal.organizer.bank_holder || '—'}</p>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-400">Número de tarjeta / CLABE</p>
+                        <p className="font-mono font-bold text-gray-900 tracking-widest break-all">{paymentModal.organizer.bank_account}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Instrucciones adicionales */}
+                  {paymentModal.organizer?.payment_instructions && (
+                    <div className="bg-white border border-gray-200 rounded-lg p-3 text-xs text-gray-700 italic">
+                      "{paymentModal.organizer.payment_instructions}"
+                    </div>
+                  )}
+
+                  {/* Fecha de solicitud */}
+                  {paymentModal.request?.created_at && (
+                    <p className="text-xs text-gray-400 text-center">
+                      Solicitado el {new Date(paymentModal.request.created_at).toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' })}
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}
