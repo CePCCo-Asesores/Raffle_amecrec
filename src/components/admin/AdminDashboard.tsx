@@ -27,7 +27,7 @@ interface PlatformMetrics {
 
 const AdminDashboard: React.FC = () => {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'overview' | 'organizers' | 'disputes' | 'plans' | 'config' | 'audit' | 'ledger'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'participants' | 'organizers' | 'disputes' | 'plans' | 'config' | 'audit' | 'ledger'>('overview');
   const [organizers, setOrganizers] = useState<Profile[]>([]);
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [config, setConfig] = useState<PlatformConfig[]>([]);
@@ -64,6 +64,13 @@ const AdminDashboard: React.FC = () => {
 
   // Dispute state
   const [disputes, setDisputes] = useState<Dispute[]>([]);
+  const [participants, setParticipants]           = useState<any[]>([]);
+  const [participantsLoading, setParticipantsLoading] = useState(false);
+  const [participantSearch, setParticipantSearch] = useState('');
+  const [participantFilter, setParticipantFilter] = useState<'all'|'active'|'suspended'>('all');
+  const [selectedParticipant, setSelectedParticipant] = useState<any | null>(null);
+  const [participantTickets, setParticipantTickets] = useState<any[]>([]);
+  const [participantTicketsLoading, setParticipantTicketsLoading] = useState(false);
   const [disputeStats, setDisputeStats] = useState<DisputeStats>({ total: 0, open: 0, under_review: 0, resolved_participant: 0, resolved_organizer: 0, closed: 0 });
   const [disputesLoading, setDisputesLoading] = useState(false);
   const [disputeFilter, setDisputeFilter] = useState<string>('all');
@@ -88,6 +95,7 @@ const AdminDashboard: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    if (activeTab === 'participants') loadParticipants();
     if (activeTab === 'disputes') loadDisputeData();
   }, [activeTab]);
 
@@ -282,6 +290,7 @@ const AdminDashboard: React.FC = () => {
   const tabs = [
     { id: 'overview', label: 'Resumen', icon: <BarChart3 className="w-4 h-4" /> },
     { id: 'disputes', label: `Disputas ${disputeStats.open + disputeStats.under_review > 0 ? `(${disputeStats.open + disputeStats.under_review})` : ''}`, icon: <Scale className="w-4 h-4" /> },
+    { id: 'participants', label: 'Participantes', icon: <UserCheck className="w-4 h-4" /> },
     { id: 'organizers', label: 'Organizadores', icon: <Users className="w-4 h-4" /> },
     { id: 'plans', label: 'Planes', icon: <DollarSign className="w-4 h-4" /> },
     { id: 'config', label: 'Configuración', icon: <Settings className="w-4 h-4" /> },
@@ -518,6 +527,175 @@ const AdminDashboard: React.FC = () => {
               <button onClick={loadData} disabled={loading} className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Actualizar métricas
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* ============================================================ */}
+        {/* PARTICIPANTS TAB */}
+        {/* ============================================================ */}
+        {activeTab === 'participants' && (
+          <div className="flex gap-6 h-[700px]">
+
+            {/* Lista */}
+            <div className="flex-1 flex flex-col min-w-0">
+              {/* Barra de búsqueda y filtros */}
+              <div className="flex gap-2 mb-4">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input type="text" value={participantSearch}
+                    onChange={e => setParticipantSearch(e.target.value)}
+                    placeholder="Buscar por nombre o email..."
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <select value={participantFilter} onChange={e => setParticipantFilter(e.target.value as any)}
+                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500">
+                  <option value="all">Todos</option>
+                  <option value="active">Activos</option>
+                  <option value="suspended">Suspendidos</option>
+                </select>
+                <button onClick={loadParticipants}
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white hover:bg-gray-50">
+                  <RefreshCw className="w-4 h-4 text-gray-600" />
+                </button>
+              </div>
+
+              {/* Lista de participantes */}
+              <div className="flex-1 overflow-y-auto space-y-2">
+                {participantsLoading ? (
+                  <div className="flex items-center justify-center h-40">
+                    <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+                  </div>
+                ) : participants
+                    .filter(p => {
+                      const q = participantSearch.toLowerCase();
+                      const matchQ = !q || (p.full_name || '').toLowerCase().includes(q) || (p.email || '').toLowerCase().includes(q);
+                      const matchF = participantFilter === 'all' ||
+                        (participantFilter === 'suspended' && p.is_suspended) ||
+                        (participantFilter === 'active' && !p.is_suspended);
+                      return matchQ && matchF;
+                    })
+                    .map(p => (
+                      <div key={p.id}
+                        onClick={() => { setSelectedParticipant(p); loadParticipantTickets(p.id); }}
+                        className={`p-3 rounded-xl border cursor-pointer transition-all ${selectedParticipant?.id === p.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:border-blue-300'}`}>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0 ${p.is_suspended ? 'bg-red-400' : 'bg-gradient-to-br from-blue-500 to-indigo-600'}`}>
+                              {(p.full_name || p.email || '?')[0].toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="font-medium text-gray-900 text-sm truncate">{p.full_name || '—'}</div>
+                              <div className="text-xs text-gray-500 truncate">{p.email}</div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            {p.is_suspended && (
+                              <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs rounded-full font-medium">Suspendido</span>
+                            )}
+                            <span className="text-xs text-gray-400">
+                              {new Date(p.created_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: '2-digit' })}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                }
+                {!participantsLoading && participants.filter(p => {
+                  const q = participantSearch.toLowerCase();
+                  return (!q || (p.full_name || '').toLowerCase().includes(q) || (p.email || '').toLowerCase().includes(q)) &&
+                    (participantFilter === 'all' || (participantFilter === 'suspended' && p.is_suspended) || (participantFilter === 'active' && !p.is_suspended));
+                }).length === 0 && (
+                  <div className="text-center py-16 text-gray-400 text-sm">No se encontraron participantes</div>
+                )}
+              </div>
+              <div className="pt-3 text-xs text-gray-400 border-t mt-2">
+                {participants.length} participante(s) registrado(s)
+              </div>
+            </div>
+
+            {/* Detalle del participante seleccionado */}
+            <div className="w-80 flex-shrink-0">
+              {!selectedParticipant ? (
+                <div className="h-full flex items-center justify-center bg-gray-50 rounded-xl border border-dashed border-gray-300">
+                  <div className="text-center text-gray-400 text-sm p-6">
+                    <UserCheck className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                    Selecciona un participante para ver su detalle
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-white rounded-xl border border-gray-200 flex flex-col h-full overflow-hidden">
+                  {/* Header */}
+                  <div className={`p-4 ${selectedParticipant.is_suspended ? 'bg-red-50' : 'bg-gradient-to-br from-blue-50 to-indigo-50'} border-b`}>
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white text-lg font-bold ${selectedParticipant.is_suspended ? 'bg-red-400' : 'bg-gradient-to-br from-blue-500 to-indigo-600'}`}>
+                        {(selectedParticipant.full_name || selectedParticipant.email || '?')[0].toUpperCase()}
+                      </div>
+                      <div>
+                        <div className="font-bold text-gray-900">{selectedParticipant.full_name || '—'}</div>
+                        <div className="text-sm text-gray-500">{selectedParticipant.email}</div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="bg-white/70 rounded-lg p-2 text-center">
+                        <div className="font-bold text-gray-900 text-base">
+                          {participantTickets.filter(t => t.status === 'sold' || t.status === 'paid').length}
+                        </div>
+                        <div className="text-gray-500">Boletos comprados</div>
+                      </div>
+                      <div className="bg-white/70 rounded-lg p-2 text-center">
+                        <div className="font-bold text-gray-900 text-base">
+                          ${participantTickets.filter(t => t.status === 'sold' || t.status === 'paid')
+                              .reduce((sum, t) => sum + (t.raffle?.price_per_ticket || 0), 0)
+                              .toLocaleString('es-MX')}
+                        </div>
+                        <div className="text-gray-500">Total gastado</div>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex gap-2">
+                      <button onClick={() => toggleSuspendParticipant(selectedParticipant)}
+                        className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${selectedParticipant.is_suspended ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-red-600 hover:bg-red-700 text-white'}`}>
+                        {selectedParticipant.is_suspended ? '✅ Reactivar cuenta' : '🚫 Suspender cuenta'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Historial de boletos */}
+                  <div className="flex-1 overflow-y-auto p-3">
+                    <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Historial de boletos</div>
+                    {participantTicketsLoading ? (
+                      <div className="flex justify-center py-8">
+                        <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
+                      </div>
+                    ) : participantTickets.length === 0 ? (
+                      <div className="text-center py-8 text-gray-400 text-xs">Sin boletos registrados</div>
+                    ) : (
+                      <div className="space-y-2">
+                        {participantTickets.map(t => (
+                          <div key={t.id} className="bg-gray-50 rounded-lg p-2.5 text-xs">
+                            <div className="flex justify-between items-start mb-1">
+                              <span className="font-mono font-bold text-gray-800">#{t.ticket_number}</span>
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                                t.status === 'paid'   ? 'bg-emerald-100 text-emerald-700' :
+                                t.status === 'sold'   ? 'bg-blue-100 text-blue-700' :
+                                t.status === 'pending_payment' ? 'bg-amber-100 text-amber-700' :
+                                'bg-gray-100 text-gray-600'
+                              }`}>
+                                {t.status === 'paid' ? 'Pagado' : t.status === 'sold' ? 'Vendido' : t.status === 'pending_payment' ? 'Pend. pago' : t.status}
+                              </span>
+                            </div>
+                            <div className="text-gray-600 truncate">{t.raffle?.name || '—'}</div>
+                            <div className="text-gray-400 mt-0.5">
+                              ${t.raffle?.price_per_ticket?.toLocaleString('es-MX')} MXN ·{' '}
+                              {t.purchased_at ? new Date(t.purchased_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }) : '—'}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
