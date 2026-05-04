@@ -99,6 +99,47 @@ const AdminDashboard: React.FC = () => {
     if (activeTab === 'disputes') loadDisputeData();
   }, [activeTab]);
 
+  const loadParticipants = async () => {
+    setParticipantsLoading(true);
+    const { data } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('role', 'participant')
+      .order('created_at', { ascending: false });
+    setParticipants(data || []);
+    setParticipantsLoading(false);
+  };
+
+  const loadParticipantTickets = async (participantId: string) => {
+    setParticipantTicketsLoading(true);
+    const { data } = await supabase
+      .from('tickets')
+      .select('*, raffle:raffle_id(name, draw_date, price_per_ticket)')
+      .eq('participant_id', participantId)
+      .order('purchased_at', { ascending: false });
+    setParticipantTickets(data || []);
+    setParticipantTicketsLoading(false);
+  };
+
+  const toggleSuspendParticipant = async (participant: any) => {
+    const isSuspended = participant.is_suspended;
+    const action = isSuspended ? 'reactivar' : 'suspender';
+    if (!confirm(`¿Deseas ${action} a ${participant.full_name}?`)) return;
+    const { error } = await supabase
+      .from('profiles')
+      .update({ is_suspended: !isSuspended })
+      .eq('id', participant.id);
+    if (error) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } else {
+      toast({ title: isSuspended ? 'Cuenta reactivada' : 'Cuenta suspendida' });
+      loadParticipants();
+      if (selectedParticipant?.id === participant.id) {
+        setSelectedParticipant({ ...selectedParticipant, is_suspended: !isSuspended });
+      }
+    }
+  };
+
   const loadPlatformMetrics = async () => {
     try {
       const [
