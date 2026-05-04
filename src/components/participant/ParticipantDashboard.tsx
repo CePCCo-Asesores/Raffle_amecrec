@@ -97,26 +97,33 @@ const ParticipantDashboard: React.FC<ParticipantDashboardProps> = ({ onNavigate 
 
     const raffleId = ticket.raffle?.id || ticket.raffle_id;
 
-    // Una sola query: los datos bancarios ya están guardados en la solicitud
-    const { data: req } = await supabase
-      .from('external_payment_requests')
-      .select('system_reference, amount_total, status, created_at, payment_reference, organizer_notes, bank_name, bank_account, bank_holder, bank_instructions')
-      .eq('raffle_id', raffleId)
-      .eq('participant_id', user!.id)
-      .contains('ticket_numbers', [ticket.ticket_number])
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    // RPC con SECURITY DEFINER — puede leer datos del organizador sin violar RLS
+    const { data, error } = await supabase.rpc('get_payment_detail', {
+      p_raffle_id:     raffleId,
+      p_ticket_number: ticket.ticket_number,
+    });
 
-    // Los datos bancarios vienen embebidos en la solicitud
-    const organizer = req ? {
-      bank_name:            req.bank_name,
-      bank_account:         req.bank_account,
-      bank_holder:          req.bank_holder,
-      payment_instructions: req.bank_instructions,
-    } : null;
+    if (error || !data?.found) {
+      setPaymentModal({ ticket, request: null, organizer: null });
+      setPaymentModalLoading(false);
+      return;
+    }
 
-    setPaymentModal({ ticket, request: req || null, organizer });
+    const req = {
+      system_reference: data.system_reference,
+      amount_total:     data.amount_total,
+      status:           data.status,
+      created_at:       data.created_at,
+      organizer_notes:  data.organizer_notes,
+    };
+    const organizer = {
+      bank_name:            data.bank_name,
+      bank_account:         data.bank_account,
+      bank_holder:          data.bank_holder,
+      payment_instructions: data.bank_instructions,
+    };
+
+    setPaymentModal({ ticket, request: req, organizer });
     setPaymentModalLoading(false);
   };
 
