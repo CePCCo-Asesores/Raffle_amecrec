@@ -64,6 +64,7 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
   const [paymentInstructions, setPaymentInstructions] = useState<{
     systemRef: string; bankName: string; bankAccount: string;
     bankHolder: string; instructions: string; total: number;
+    ticketCount: number; ticketNums: number[];
   } | null>(null);
   const [paymentVerified, setPaymentVerified] = useState(false);
   const [activePhoto, setActivePhoto]         = useState(0);
@@ -387,6 +388,7 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
         return;
       }
 
+      const confirmedTickets = [...selectedTickets]; // capturar antes de limpiar
       setExternalRequestId(result.request_id);
       setPaymentInstructions({
         systemRef:    result.system_ref    || '',
@@ -395,6 +397,8 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
         bankHolder:   result.bank_holder   || '',
         instructions: result.payment_instructions || '',
         total:        result.total         || totalCost,
+        ticketCount:  confirmedTickets.length,
+        ticketNums:   confirmedTickets,
       });
       reservedByMeRef.current = [];
       setSelectedTickets([]);
@@ -806,9 +810,15 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
               )}
               <div className="space-y-3 mb-4">
                 <div className="flex justify-between text-sm"><span className="text-gray-500">Sorteo</span><span className="font-medium">{raffle.name}</span></div>
-                <div className="flex justify-between text-sm"><span className="text-gray-500">Boletos</span><span className="font-medium">{selectedTickets.sort((a,b)=>a-b).map(n=>`#${n}`).join(', ')}</span></div>
+                <div className="flex justify-between text-sm"><span className="text-gray-500">Boletos</span><span className="font-medium">
+                  {externalRequestId && paymentInstructions
+                    ? paymentInstructions.ticketNums.sort((a,b)=>a-b).map(n=>`#${n}`).join(', ')
+                    : selectedTickets.sort((a,b)=>a-b).map(n=>`#${n}`).join(', ')}
+                </span></div>
                 <div className="flex justify-between text-sm"><span className="text-gray-500">Precio unitario</span><span className="font-medium">${raffle.price_per_ticket} MXN</span></div>
-                <div className="flex justify-between text-sm"><span className="text-gray-500">Cantidad</span><span className="font-medium">{selectedTickets.length}</span></div>
+                <div className="flex justify-between text-sm"><span className="text-gray-500">Cantidad</span><span className="font-medium">
+                  {externalRequestId && paymentInstructions ? paymentInstructions.ticketCount : selectedTickets.length}
+                </span></div>
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-500">Método</span>
                   <span className="font-medium flex items-center gap-1">
@@ -817,7 +827,9 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
                 </div>
                 <div className="border-t pt-3 flex justify-between">
                   <span className="font-bold">Total</span>
-                  <span className="font-bold text-xl text-blue-600">${totalCost.toLocaleString('es-MX')} MXN</span>
+                  <span className="font-bold text-xl text-blue-600">
+                    ${(externalRequestId && paymentInstructions ? paymentInstructions.total : totalCost).toLocaleString('es-MX')} MXN
+                  </span>
                 </div>
               </div>
               <div className="bg-gradient-to-r from-emerald-50 to-blue-50 border border-emerald-200 rounded-lg p-3 mb-4">
@@ -938,3 +950,4 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
 };
 
 export default TicketGrid;
+
