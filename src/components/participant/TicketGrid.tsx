@@ -267,6 +267,11 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
     const t = getInfo(num);
     if (t.status === 'paid')  return 'bg-emerald-500 text-white cursor-not-allowed';
     if (t.status === 'sold')  return 'bg-gray-400 text-white cursor-not-allowed';
+    if (t.status === 'pending_payment') {
+      // Si es del propio usuario: naranja claro; si es de otro: gris similar a sold
+      if (t.participant_id === user?.id) return 'bg-orange-400 text-white ring-2 ring-orange-200 cursor-not-allowed';
+      return 'bg-gray-400 text-white cursor-not-allowed';
+    }
     if (t.status === 'reserved') {
       if (t.reserved_by === user?.id) return 'bg-blue-400 text-white ring-2 ring-blue-200';
       if (t.reserved_until && new Date(t.reserved_until) > new Date())
@@ -280,6 +285,7 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
     if (reservingTicket !== null)      return false;
     const t = getInfo(num);
     if (t.status === 'sold' || t.status === 'paid') return false;
+    if (t.status === 'pending_payment' && t.participant_id !== user?.id) return false;
     if (t.status === 'reserved' && t.reserved_by !== user?.id) {
       if (t.reserved_until && new Date(t.reserved_until) > new Date()) return false;
     }
@@ -289,6 +295,7 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
   const hasBadge = (num: number): 'lock' | 'ban' | null => {
     const t = getInfo(num);
     if (t.status === 'sold' || t.status === 'paid') return 'lock';
+    if (t.status === 'pending_payment' && t.participant_id !== user?.id) return 'lock';
     if (t.status === 'reserved' && t.reserved_by !== user?.id &&
         t.reserved_until && new Date(t.reserved_until) > new Date()) return 'ban';
     return null;
@@ -431,6 +438,7 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
     const now = new Date();
     ticketMap.forEach(t => {
       if (t.status === 'sold' || t.status === 'paid') sold++;
+      else if (t.status === 'pending_payment') sold++; // pago en proceso = no disponible
       else if (t.status === 'reserved' && t.reserved_by !== user?.id && t.reserved_until && new Date(t.reserved_until) > now) reserved++;
     });
     return { soldCount: sold, reservedByOthersCount: reserved, availableCount: raffle.total_tickets - sold - reserved };
@@ -647,6 +655,7 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
             <span className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-gray-400" /> Vendido</span>
             <span className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-emerald-500" /> Pagado</span>
             <span className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-amber-300" /> Reservado (otro)</span>
+            <span className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-orange-400" /> Pago pendiente (tuyo)</span>
           </div>
           <div className="ml-auto text-xs text-gray-400">
             Actualizado: {lastRefresh.toLocaleTimeString('es-MX')}
