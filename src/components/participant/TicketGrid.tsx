@@ -61,6 +61,10 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
   const [paymentReference, setPaymentReference]     = useState('');
   const [paymentNotes, setPaymentNotes]             = useState('');
   const [externalRequestId, setExternalRequestId]   = useState<string | null>(null);
+  const [paymentInstructions, setPaymentInstructions] = useState<{
+    systemRef: string; bankName: string; bankAccount: string;
+    bankHolder: string; instructions: string; total: number;
+  } | null>(null);
   const [paymentVerified, setPaymentVerified] = useState(false);
   const [activePhoto, setActivePhoto]         = useState(0);
   const [reservingTicket, setReservingTicket] = useState<number | null>(null);
@@ -377,6 +381,14 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
       }
 
       setExternalRequestId(result.request_id);
+      setPaymentInstructions({
+        systemRef:    result.system_ref    || '',
+        bankName:     result.bank_name     || '',
+        bankAccount:  result.bank_account  || '',
+        bankHolder:   result.bank_holder   || '',
+        instructions: result.payment_instructions || '',
+        total:        result.total         || totalCost,
+      });
       reservedByMeRef.current = [];
       setSelectedTickets([]);
       setReservationTimer(0);
@@ -831,18 +843,66 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
                 </div>
               )}
 
-              {/* Confirmación enviada */}
-              {externalRequestId && (
-                <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 mb-4 text-center">
-                  <div className="text-2xl mb-2">✅</div>
-                  <p className="text-sm font-bold text-emerald-800">Solicitud enviada</p>
-                  <p className="text-xs text-emerald-700 mt-1">Tus boletos están reservados. El organizador revisará tu pago y confirmará en breve.</p>
-                  <p className="text-xs text-gray-400 mt-2">Si no recibes confirmación en 48 horas, los boletos se liberarán automáticamente.</p>
+              {/* Instrucciones de pago tras enviar solicitud */}
+              {externalRequestId && paymentInstructions && (
+                <div className="space-y-3 mb-4">
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 flex items-center gap-2">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+                    <div>
+                      <p className="text-sm font-bold text-emerald-800">Solicitud registrada</p>
+                      <p className="text-xs text-emerald-700">Realiza el pago y espera la confirmación del organizador.</p>
+                    </div>
+                  </div>
+
+                  {/* Referencia */}
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    <p className="text-xs text-blue-600 font-semibold uppercase tracking-wide mb-1">Tu referencia de pago</p>
+                    <p className="font-mono font-bold text-blue-900 text-lg tracking-widest">{paymentInstructions.systemRef}</p>
+                    <p className="text-xs text-blue-600 mt-1">Incluye esta referencia en tu transferencia o depósito.</p>
+                  </div>
+
+                  {/* Datos bancarios */}
+                  {paymentInstructions.bankAccount ? (
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-2">
+                      <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Datos para pago</p>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div>
+                          <p className="text-xs text-gray-400">Banco</p>
+                          <p className="font-medium text-gray-900">{paymentInstructions.bankName || '—'}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-400">Titular</p>
+                          <p className="font-medium text-gray-900">{paymentInstructions.bankHolder || '—'}</p>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-400">Número de tarjeta / CLABE</p>
+                        <p className="font-mono font-bold text-gray-900 text-base tracking-widest">{paymentInstructions.bankAccount}</p>
+                      </div>
+                      <div className="border-t pt-2 flex justify-between">
+                        <span className="text-xs text-gray-500">Total a depositar</span>
+                        <span className="font-bold text-gray-900">${paymentInstructions.total.toLocaleString('es-MX')} MXN</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
+                      El organizador te contactará con los datos de pago.
+                    </div>
+                  )}
+
+                  {/* Instrucciones adicionales */}
+                  {paymentInstructions.instructions && (
+                    <div className="bg-white border border-gray-200 rounded-lg p-3 text-sm text-gray-700 italic">
+                      "{paymentInstructions.instructions}"
+                    </div>
+                  )}
+
+                  <p className="text-xs text-gray-400 text-center">Si no se confirma en 48 h, los boletos se liberan automáticamente.</p>
                 </div>
               )}
 
               <div className="flex gap-3">
-                <button onClick={() => { cancelSelection(); setExternalRequestId(null); setPaymentReference(''); setPaymentNotes(''); }}
+                <button onClick={() => { cancelSelection(); setExternalRequestId(null); setPaymentReference(''); setPaymentNotes(''); setPaymentInstructions(null); }}
                   disabled={stripeRedirecting}
                   className="flex-1 py-2.5 border border-gray-300 rounded-lg font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
                   {externalRequestId ? 'Cerrar' : 'Cancelar'}
