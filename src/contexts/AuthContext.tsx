@@ -7,7 +7,7 @@ interface AuthContextType {
   user: Profile | null;
   loading: boolean;
   isAuthenticated: boolean;
-  signUp: (email: string, password: string, fullName: string, role: UserRole) => Promise<{ success: boolean; needsVerification: boolean; email?: string }>;
+  signUp: (email: string, password: string, fullName: string, role: UserRole) => Promise<boolean>;
   signIn: (email: string, password: string) => Promise<boolean>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<Profile>) => Promise<boolean>;
@@ -17,7 +17,7 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
   isAuthenticated: false,
-  signUp: async () => ({ success: false, needsVerification: false }),
+  signUp: async () => false,
   signIn: async () => false,
   signOut: async () => {},
   updateProfile: async () => false,
@@ -87,7 +87,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     password: string,
     fullName: string,
     role: UserRole
-  ): Promise<{ success: boolean; needsVerification: boolean; email?: string }> => {
+  ): Promise<boolean> => {
     try {
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -97,29 +97,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (error) {
         toast({ title: 'Error al registrarse', description: error.message, variant: 'destructive' });
-        return { success: false, needsVerification: false };
+        return false;
       }
 
       if (data.user) {
-        // Guardar perfil (aunque no esté verificado aún)
         await supabase.from('profiles').upsert({
           id: data.user.id,
           email,
           full_name: fullName,
           role,
         });
-
-        // Si session es null, Supabase requiere verificación de email
-        const needsVerification = !data.session;
-        if (!needsVerification) {
-          toast({ title: 'Registro exitoso', description: `Bienvenido a Sorteos AMECREC, ${fullName}!` });
-        }
-        return { success: true, needsVerification, email };
+        toast({ title: 'Registro exitoso', description: `Bienvenido a Sorteos AMECREC, ${fullName}!` });
+        return true;
       }
-      return { success: false, needsVerification: false };
+      return false;
     } catch {
       toast({ title: 'Error', description: 'Ocurrió un error inesperado', variant: 'destructive' });
-      return { success: false, needsVerification: false };
+      return false;
     }
   };
 
