@@ -57,7 +57,10 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
   const [reservationTimer, setReservationTimer] = useState(0);
   const [searchNumber, setSearchNumber]       = useState('');
   const [purchaseErrors, setPurchaseErrors]   = useState<string[]>([]);
-  const [stripeRedirecting, setStripeRedirecting] = useState(false);
+  const [stripeRedirecting, setStripeRedirecting]   = useState(false);
+  const [paymentReference, setPaymentReference]     = useState('');
+  const [paymentNotes, setPaymentNotes]             = useState('');
+  const [externalRequestId, setExternalRequestId]   = useState<string | null>(null);
   const [paymentVerified, setPaymentVerified] = useState(false);
   const [activePhoto, setActivePhoto]         = useState(0);
   const [reservingTicket, setReservingTicket] = useState<number | null>(null);
@@ -351,25 +354,51 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
     } catch (e: any) { setPurchaseErrors([e.message]); setStripeRedirecting(false); }
   };
 
-  const handleDirectPurchase = async () => {
+  const handleExternalPaymentRequest = async () => {
     if (!user || !selectedTickets.length) return;
     setPurchasing(true);
     try {
-      const r = await atomicTicketPurchase({ userId: user.id, userEmail: user.email, raffleId: raffle.id, ticketNumbers: selectedTickets, paymentMethod: raffle.payment_method, commissionRate: 5, pricePerTicket: raffle.price_per_ticket });
-      if (r.success) {
-        toast({ title: 'Compra exitosa', description: `${r.purchasedTickets.length} boleto(s) adquirido(s) para "${raffle.name}".` });
-        sendTicketPurchaseNotification({ userId: user.id, raffleId: raffle.id, ticketNumbers: r.purchasedTickets, amount: r.purchasedTickets.length * raffle.price_per_ticket, paymentMethod: raffle.payment_method });
-        reservedByMeRef.current = [];
-        setSelectedTickets([]);
-        setShowPurchaseModal(false);
-        setReservationTimer(0);
-        loadTickets();
-      } else {
-        setPurchaseErrors(r.errors);
-        toast({ title: 'Error en la compra', description: r.errors.join('\n'), variant: 'destructive' });
-        loadTickets();
+      const { data, error } = await supabase.rpc('request_external_payment', {
+        p_user_id:          user.id,
+        p_raffle_id:        raffle.id,
+        p_ticket_numbers:   selectedTickets,
+        p_price_per_ticket: raffle.price_per_ticket,
+        p_payment_reference: paymentReference || null,
+        p_notes:            paymentNotes || null,
+      });
+
+      if (error) throw error;
+      const result = data as any;
+
+      if (!result?.success) {
+        setPurchaseErrors([result?.error || 'Error al procesar la solicitud']);
+        setPurchasing(false);
+        return;
       }
-    } catch { toast({ title: 'Error', description: 'Ocurrió un error al procesar la compra', variant: 'destructive' }); }
+
+      setExternalRequestId(result.request_id);
+      reservedByMeRef.current = [];
+      setSelectedTickets([]);
+      setReservationTimer(0);
+      loadTickets();
+      // Enviar email de confirmación de solicitud
+      supabase.functions.invoke('send-notifications', {
+        body: {
+          action:            'external-payment-request',
+          user_id:           user.id,
+          raffle_id:         raffle.id,
+          ticket_numbers:    selectedTickets,
+          amount:            selectedTickets.length * raffle.price_per_ticket,
+          payment_reference: paymentReference || null,
+        },
+      }).catch(() => {}); // no-blocking
+      toast({
+        title: '✅ Solicitud enviada',
+        description: `Recibirás un correo con los detalles de tu reserva.`,
+      });
+    } catch (e: any) {
+      setPurchaseErrors([e?.message || 'Error inesperado']);
+    }
     setPurchasing(false);
   };
 
@@ -779,24 +808,56 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
                   </p>
                 </div>
               </div>
-              {raffle.payment_method === 'external' && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
-                  <p className="text-xs text-blue-800"><strong>Pago externo:</strong> El organizador te contactará con instrucciones de pago.</p>
+              {/* Pago externo: campos de referencia */}
+              {!isStripePayment && !externalRequestId && (
+                <div className="space-y-2 mb-4">
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                    <p className="text-xs text-amber-800 font-medium mb-1">📋 Instrucciones de pago</p>
+                    <p className="text-xs text-amber-700">Realiza tu pago por transferencia, depósito o el método indicado por el organizador. Ingresa la referencia de tu pago y envía la solicitud.</p>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-700 block mb-1">Referencia de pago <span className="text-gray-400">(folio, número de operación)</span></label>
+                    <input type="text" value={paymentReference} onChange={e => setPaymentReference(e.target.value)}
+                      placeholder="Ej: TRF-2026-123456"
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-700 block mb-1">Notas adicionales <span className="text-gray-400">(opcional)</span></label>
+                    <textarea value={paymentNotes} onChange={e => setPaymentNotes(e.target.value)}
+                      placeholder="Ej: Pagué desde BBVA el día de hoy"
+                      rows={2}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 resize-none" />
+                  </div>
                 </div>
               )}
+
+              {/* Confirmación enviada */}
+              {externalRequestId && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 mb-4 text-center">
+                  <div className="text-2xl mb-2">✅</div>
+                  <p className="text-sm font-bold text-emerald-800">Solicitud enviada</p>
+                  <p className="text-xs text-emerald-700 mt-1">Tus boletos están reservados. El organizador revisará tu pago y confirmará en breve.</p>
+                  <p className="text-xs text-gray-400 mt-2">Si no recibes confirmación en 48 horas, los boletos se liberarán automáticamente.</p>
+                </div>
+              )}
+
               <div className="flex gap-3">
-                <button onClick={cancelSelection} disabled={stripeRedirecting} className="flex-1 py-2.5 border border-gray-300 rounded-lg font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
-                  Cancelar
+                <button onClick={() => { cancelSelection(); setExternalRequestId(null); setPaymentReference(''); setPaymentNotes(''); }}
+                  disabled={stripeRedirecting}
+                  className="flex-1 py-2.5 border border-gray-300 rounded-lg font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                  {externalRequestId ? 'Cerrar' : 'Cancelar'}
                 </button>
                 {isStripePayment ? (
-                  <button onClick={handleStripeCheckout} disabled={stripeRedirecting || purchasing} className="flex-1 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg font-bold disabled:opacity-50 flex items-center justify-center gap-2">
+                  <button onClick={handleStripeCheckout} disabled={stripeRedirecting || purchasing}
+                    className="flex-1 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg font-bold disabled:opacity-50 flex items-center justify-center gap-2">
                     {stripeRedirecting ? <><Loader2 className="w-4 h-4 animate-spin" /> Redirigiendo...</> : <><CreditCard className="w-4 h-4" /> Pagar con Stripe <ExternalLink className="w-3.5 h-3.5" /></>}
                   </button>
-                ) : (
-                  <button onClick={handleDirectPurchase} disabled={purchasing} className="flex-1 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 text-white rounded-lg font-bold disabled:opacity-50 flex items-center justify-center gap-2">
-                    {purchasing ? <><Loader2 className="w-4 h-4 animate-spin" /> Procesando...</> : <><Lock className="w-4 h-4" /> Confirmar Compra</>}
+                ) : !externalRequestId ? (
+                  <button onClick={handleExternalPaymentRequest} disabled={purchasing}
+                    className="flex-1 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 text-white rounded-lg font-bold disabled:opacity-50 flex items-center justify-center gap-2">
+                    {purchasing ? <><Loader2 className="w-4 h-4 animate-spin" /> Enviando...</> : <><Lock className="w-4 h-4" /> Enviar Solicitud</>}
                   </button>
-                )}
+                ) : null}
               </div>
             </div>
           </div>
