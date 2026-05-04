@@ -29,7 +29,7 @@ interface OrganizerDashboardProps {
 
 const OrganizerDashboard: React.FC<OrganizerDashboardProps> = ({ onNavigate }) => {
   const { user, updateProfile } = useAuth();
-  const [activeTab, setActiveTab] = useState<'raffles' | 'winner' | 'refunds' | 'disputes' | 'stripe' | 'reports' | 'plan'>('raffles');
+  const [activeTab, setActiveTab] = useState<'raffles' | 'winner' | 'payments' | 'refunds' | 'disputes' | 'stripe' | 'reports' | 'plan'>('raffles');
 
 
   const [raffles, setRaffles] = useState<Raffle[]>([]);
@@ -53,6 +53,10 @@ const OrganizerDashboard: React.FC<OrganizerDashboardProps> = ({ onNavigate }) =
 
   // Refund management state
   const [refundRequests, setRefundRequests] = useState<RefundRequest[]>([]);
+  const [pendingPayments, setPendingPayments] = useState<any[]>([]);
+  const [pendingPaymentsCount, setPendingPaymentsCount] = useState(0);
+  const [processingPayment, setProcessingPayment] = useState<string | null>(null);
+  const [paymentOrgNotes, setPaymentOrgNotes] = useState<Record<string, string>>({});
   const [refundStats, setRefundStats] = useState<RefundStats>({ total: 0, pending: 0, approved: 0, denied: 0, refunded: 0, failed: 0, total_amount_refunded: 0, total_amount_pending: 0 });
   const [refundsLoading, setRefundsLoading] = useState(false);
   const [refundFilterStatus, setRefundFilterStatus] = useState<string>('all');
@@ -85,6 +89,29 @@ const OrganizerDashboard: React.FC<OrganizerDashboardProps> = ({ onNavigate }) =
   }, [user]);
 
   useEffect(() => {
+    if (user && activeTab === 'payments') {
+      supabase
+        .from('external_payment_requests')
+        .select('*, profiles:participant_id(full_name, email), raffles:raffle_id(name)')
+        .in('raffle_id', [])  // se llenará abajo
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false })
+        .then(async () => {
+          // Traer las rifas del organizador primero
+          const { data: myRaffles } = await supabase
+            .from('raffles').select('id').eq('organizer_id', user.id);
+          if (!myRaffles?.length) { setPendingPayments([]); return; }
+          const raffleIds = myRaffles.map((r: any) => r.id);
+          const { data } = await supabase
+            .from('external_payment_requests')
+            .select('*, participant:participant_id(full_name, email), raffle:raffle_id(name, price_per_ticket)')
+            .in('raffle_id', raffleIds)
+            .eq('status', 'pending')
+            .order('created_at', { ascending: false });
+          setPendingPayments(data || []);
+          setPendingPaymentsCount((data || []).length);
+        });
+    }
     if (user && activeTab === 'refunds') {
       loadRefundData();
     }
@@ -512,6 +539,7 @@ const OrganizerDashboard: React.FC<OrganizerDashboardProps> = ({ onNavigate }) =
           {[
             { id: 'raffles', label: 'Mis Sorteos', icon: <TicketIcon className="w-4 h-4" /> },
             { id: 'plan', label: 'Mi Plan', icon: <Crown className="w-4 h-4" /> },
+            { id: 'payments', label: `Pagos Ext.${pendingPaymentsCount > 0 ? ` (${pendingPaymentsCount})` : ''}`, icon: <Wallet className="w-4 h-4" /> },
             { id: 'refunds', label: `Reembolsos ${refundStats.pending > 0 ? `(${refundStats.pending})` : ''}`, icon: <RotateCcw className="w-4 h-4" /> },
             { id: 'disputes', label: `Disputas ${activeDisputeCount > 0 ? `(${activeDisputeCount})` : ''}`, icon: <Scale className="w-4 h-4" /> },
             { id: 'winner', label: 'Ganadores', icon: <Trophy className="w-4 h-4" /> },
@@ -701,6 +729,129 @@ const OrganizerDashboard: React.FC<OrganizerDashboardProps> = ({ onNavigate }) =
         {/* ============================================================ */}
         {/* REFUNDS TAB */}
         {/* ============================================================ */}
+        {activeTab === 'payments' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-gray-900">Pagos Externos Pendientes</h3>
+              <span className="text-sm text-gray-500">{pendingPayments.length} solicitud(es)</span>
+            </div>
+
+            {pendingPayments.length === 0 ? (
+              <div className="text-center py-16 bg-gray-50 rounded-xl border border-gray-200">
+                <div className="text-4xl mb-3">✅</div>
+                <p className="text-gray-500">No hay pagos externos pendientes de confirmar.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {pendingPayments.map((req: any) => (
+                  <div key={req.id} className="bg-white rounded-xl border border-amber-200 p-4">
+                    <div className="flex items-start justify-between gap-4 mb-3">
+                      <div>
+                        <div className="font-semibold text-gray-900">{req.participant?.full_name || 'Participante'}</div>
+                        <div className="text-sm text-gray-500">{req.participant?.email}</div>
+                        <div className="text-xs text-gray-400 mt-0.5">Sorteo: {req.raffle?.name}</div>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <div className="font-bold text-lg text-gray-900">${req.amount_total?.toLocaleString('es-MX')} MXN</div>
+                        <div className="text-xs text-gray-500">{req.ticket_numbers?.length} boleto(s)</div>
+                        <div className="text-xs text-gray-400">
+                          {new Date(req.created_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-1.5 mb-3">
+                      {req.ticket_numbers?.map((n: number) => (
+                        <span key={n} className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-xs font-mono font-semibold">#{n}</span>
+                      ))}
+                    </div>
+
+                    {req.payment_reference && (
+                      <div className="bg-gray-50 rounded-lg p-2.5 mb-3 text-sm">
+                        <span className="font-medium text-gray-700">Referencia: </span>
+                        <span className="text-gray-600 font-mono">{req.payment_reference}</span>
+                      </div>
+                    )}
+                    {req.participant_notes && (
+                      <div className="bg-gray-50 rounded-lg p-2.5 mb-3 text-sm text-gray-600 italic">
+                        "{req.participant_notes}"
+                      </div>
+                    )}
+
+                    <div className="mb-3">
+                      <textarea
+                        placeholder="Notas para el participante (opcional)"
+                        value={paymentOrgNotes[req.id] || ''}
+                        onChange={e => setPaymentOrgNotes(prev => ({ ...prev, [req.id]: e.target.value }))}
+                        rows={2}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+
+                    <div className="flex gap-2">
+                      <button
+                        disabled={processingPayment === req.id}
+                        onClick={async () => {
+                          setProcessingPayment(req.id);
+                          const { data } = await supabase.rpc('confirm_external_payment', {
+                            p_request_id: req.id,
+                            p_organizer_id: user!.id,
+                            p_notes: paymentOrgNotes[req.id] || null,
+                          });
+                          const result = data as any;
+                          if (result?.success) {
+                            toast({ title: '✅ Pago confirmado', description: `${req.ticket_numbers?.length} boleto(s) marcados como vendidos.` });
+                            setPendingPayments(prev => prev.filter(p => p.id !== req.id));
+                            setPendingPaymentsCount(prev => Math.max(0, prev - 1));
+                            // Email al participante
+                            supabase.functions.invoke('send-notifications', {
+                              body: { action: 'external-payment-confirmed', request_id: req.id, organizer_notes: paymentOrgNotes[req.id] || null },
+                            }).catch(() => {});
+                          } else {
+                            toast({ title: 'Error', description: result?.error || 'No se pudo confirmar', variant: 'destructive' });
+                          }
+                          setProcessingPayment(null);
+                        }}
+                        className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-semibold disabled:opacity-50 flex items-center justify-center gap-1.5"
+                      >
+                        {processingPayment === req.id ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Procesando...</> : '✅ Confirmar pago'}
+                      </button>
+                      <button
+                        disabled={processingPayment === req.id}
+                        onClick={async () => {
+                          if (!confirm('¿Rechazar esta solicitud? Los boletos quedarán disponibles nuevamente.')) return;
+                          setProcessingPayment(req.id);
+                          const { data } = await supabase.rpc('reject_external_payment', {
+                            p_request_id: req.id,
+                            p_organizer_id: user!.id,
+                            p_notes: paymentOrgNotes[req.id] || null,
+                          });
+                          const result = data as any;
+                          if (result?.success) {
+                            toast({ title: 'Solicitud rechazada', description: 'Los boletos fueron liberados.' });
+                            setPendingPayments(prev => prev.filter(p => p.id !== req.id));
+                            setPendingPaymentsCount(prev => Math.max(0, prev - 1));
+                            // Email al participante
+                            supabase.functions.invoke('send-notifications', {
+                              body: { action: 'external-payment-rejected', request_id: req.id, organizer_notes: paymentOrgNotes[req.id] || null },
+                            }).catch(() => {});
+                          } else {
+                            toast({ title: 'Error', description: result?.error || 'No se pudo rechazar', variant: 'destructive' });
+                          }
+                          setProcessingPayment(null);
+                        }}
+                        className="px-4 py-2 border border-red-300 text-red-600 hover:bg-red-50 rounded-lg text-sm font-semibold disabled:opacity-50"
+                      >
+                        ✕ Rechazar
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {activeTab === 'refunds' && (
           <div>
             {/* Refund Stats */}
