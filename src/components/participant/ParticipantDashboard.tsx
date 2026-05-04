@@ -95,25 +95,39 @@ const ParticipantDashboard: React.FC<ParticipantDashboardProps> = ({ onNavigate 
     setPaymentModal({ ticket, request: null, organizer: null });
     setPaymentModalLoading(true);
 
-    // Buscar la solicitud de pago externo de este boleto
+    // El raffle_id puede venir de ticket.raffle.id (join) o ticket.raffle_id (campo directo)
+    const raffleId = ticket.raffle?.id || ticket.raffle_id;
+
+    // 1. Buscar solicitud de pago externo
     const { data: req } = await supabase
       .from('external_payment_requests')
-      .select('system_reference, amount_total, status, created_at, payment_reference')
-      .eq('raffle_id', ticket.raffle_id || ticket.raffle?.id)
+      .select('system_reference, amount_total, status, created_at, payment_reference, organizer_notes')
+      .eq('raffle_id', raffleId)
       .eq('participant_id', user!.id)
       .contains('ticket_numbers', [ticket.ticket_number])
       .order('created_at', { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
 
-    // Buscar datos bancarios del organizador
-    const { data: org } = await supabase
+    // 2. Obtener el organizer_id de la rifa
+    const { data: raffleData } = await supabase
       .from('raffles')
-      .select('organizer:organizer_id(bank_name, bank_account, bank_holder, payment_instructions)')
-      .eq('id', ticket.raffle_id || ticket.raffle?.id)
+      .select('organizer_id')
+      .eq('id', raffleId)
       .single();
 
-    setPaymentModal({ ticket, request: req || null, organizer: (org?.organizer as any) || null });
+    // 3. Obtener datos bancarios del organizador
+    let organizer = null;
+    if (raffleData?.organizer_id) {
+      const { data: orgData } = await supabase
+        .from('profiles')
+        .select('bank_name, bank_account, bank_holder, payment_instructions')
+        .eq('id', raffleData.organizer_id)
+        .single();
+      organizer = orgData;
+    }
+
+    setPaymentModal({ ticket, request: req || null, organizer });
     setPaymentModalLoading(false);
   };
 
