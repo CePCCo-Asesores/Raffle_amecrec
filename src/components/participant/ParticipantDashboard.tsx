@@ -938,7 +938,7 @@ const ParticipantDashboard: React.FC<ParticipantDashboardProps> = ({ onNavigate 
                   )}
 
                   {/* Datos bancarios del organizador */}
-                  {paymentModal.organizer?.bank_account && (
+                  {paymentModal.organizer?.bank_account ? (
                     <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-2">
                       <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Datos para depósito</p>
                       <div className="grid grid-cols-2 gap-2 text-xs">
@@ -953,15 +953,21 @@ const ParticipantDashboard: React.FC<ParticipantDashboardProps> = ({ onNavigate 
                       </div>
                       <div>
                         <p className="text-xs text-gray-400">Número de tarjeta / CLABE</p>
-                        <p className="font-mono font-bold text-gray-900 tracking-widest break-all">{paymentModal.organizer.bank_account}</p>
+                        <p className="font-mono font-bold text-gray-900 text-base tracking-widest break-all">{paymentModal.organizer.bank_account}</p>
                       </div>
+                      {paymentModal.organizer.payment_instructions && (
+                        <div className="border-t pt-2 text-xs text-gray-600 italic">
+                          "{paymentModal.organizer.payment_instructions}"
+                        </div>
+                      )}
                     </div>
-                  )}
-
-                  {/* Instrucciones adicionales */}
-                  {paymentModal.organizer?.payment_instructions && (
-                    <div className="bg-white border border-gray-200 rounded-lg p-3 text-xs text-gray-700 italic">
-                      "{paymentModal.organizer.payment_instructions}"
+                  ) : (
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
+                      <span className="text-amber-500 text-base flex-shrink-0">⚠️</span>
+                      <div className="text-xs text-amber-800">
+                        <p className="font-semibold mb-0.5">El organizador aún no ha registrado sus datos bancarios.</p>
+                        <p>Contáctalo directamente para coordinar el pago: <a href="mailto:contacto@alianzaindigo.org" className="underline">contacto@alianzaindigo.org</a></p>
+                      </div>
                     </div>
                   )}
 
