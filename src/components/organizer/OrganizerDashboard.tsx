@@ -1506,3 +1506,4 @@ const OrganizerDashboard: React.FC<OrganizerDashboardProps> = ({ onNavigate }) =
 };
 
 export default OrganizerDashboard;
+
