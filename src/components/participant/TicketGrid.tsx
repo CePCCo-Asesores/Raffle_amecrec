@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 
-// ─── tipos locales ────────────────────────────────────────────────────────────
+// ─── tipos locales ────────────────────────────────────────────────────────────────────────────────
 interface TicketInfo {
   id: string;
   status: 'available' | 'reserved' | 'sold' | 'paid';
@@ -41,7 +41,7 @@ function useCols(): number {
   return cols;
 }
 
-// ─── componente ──────────────────────────────────────────────────────────────
+// ─── componente ────────────────────────────────────────────────────────────────────────────────
 const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
   const { user, isAuthenticated } = useAuth();
   const { openAuthModal } = useAppContext();
@@ -87,7 +87,7 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
   selectedTicketsRef.current = selectedTickets;
   userIdRef.current          = user?.id;
 
-  // ── carga inteligente: solo boletos no-disponibles ─────────────────────────
+  // ── carga inteligente: solo boletos no-disponibles ───────────────────────────────────────────
   const loadTickets = useCallback(async () => {
     const PAGE = 1000;
     const rows: any[] = [];
@@ -161,7 +161,7 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
     setLastRefresh(new Date());
   }, [raffle.id, user?.id]);
 
-  // ── retorno de Stripe ──────────────────────────────────────────────────────
+  // ── retorno de Stripe ───────────────────────────────────────────────────────────────────
   useEffect(() => {
     const ret = handlePaymentReturn();
     if (!ret.isPaymentReturn) return;
@@ -179,14 +179,14 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
     }
   }, []); // eslint-disable-line
 
-  // ── polling cada 10 s (solo no-disponibles = query ligera) ────────────────
+  // ── polling cada 10 s (solo no-disponibles = query ligera) ────────────────────────────────────
   useEffect(() => {
     loadTickets();
     const id = setInterval(loadTickets, 10_000);
     return () => clearInterval(id);
-  }, [raffle.id]); // eslint-disable-line
+  }, [loadTickets]);
 
-  // ── suscripción realtime ───────────────────────────────────────────────────
+  // ── suscripción realtime ─────────────────────────────────────────────────────────────────────
   useEffect(() => {
     const ch = supabase.channel(`tickets-${raffle.id}`)
       .on('postgres_changes',
@@ -224,7 +224,7 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
     return () => { supabase.removeChannel(ch); };
   }, [raffle.id]);
 
-  // ── liberar reservas al salir ──────────────────────────────────────────────
+  // ── liberar reservas al salir ──────────────────────────────────────────────────────────────────
   useEffect(() => {
     return () => {
       if (reservedByMeRef.current.length > 0 && user?.id) {
@@ -233,7 +233,7 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
     };
   }, [raffle.id, user?.id]);
 
-  // ── timer de reserva ──────────────────────────────────────────────────────
+  // ── timer de reserva ────────────────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (reservationTimer <= 0) return;
     const id = setInterval(() => {
@@ -254,7 +254,7 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
     return () => clearInterval(id);
   }, [reservationTimer, raffle.id, user?.id]);
 
-  // ── helpers de estado de boleto ───────────────────────────────────────────
+  // ── helpers de estado de boleto ────────────────────────────────────────────────────────────────────
   const getInfo = useCallback((num: number): TicketInfo => {
     return ticketMap.get(num) ?? { id: '', status: 'available' };
   }, [ticketMap]);
@@ -269,7 +269,6 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
     if (t.status === 'paid')  return 'bg-emerald-500 text-white cursor-not-allowed';
     if (t.status === 'sold')  return 'bg-gray-400 text-white cursor-not-allowed';
     if (t.status === 'pending_payment') {
-      // Si es del propio usuario: naranja claro; si es de otro: gris similar a sold
       if (t.participant_id === user?.id) return 'bg-orange-400 text-white ring-2 ring-orange-200 cursor-not-allowed';
       return 'bg-gray-400 text-white cursor-not-allowed';
     }
@@ -302,7 +301,7 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
     return null;
   };
 
-  // ── toggleTicket ──────────────────────────────────────────────────────────
+  // ── toggleTicket ──────────────────────────────────────────────────────────────────────────────────
   const toggleTicket = async (num: number) => {
     if (!isAuthenticated || !user) {
       openAuthModal('register');
@@ -346,7 +345,7 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
     setReservingTicket(null);
   };
 
-  // ── compra ────────────────────────────────────────────────────────────────
+  // ── compra ──────────────────────────────────────────────────────────────────────────────────
   const startPurchase = () => {
     if (!selectedTickets.length || !user) return;
     const rc = rateLimiter.canPurchaseTickets(user.id, selectedTickets.length);
@@ -436,7 +435,7 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
     setStripeRedirecting(false);
   };
 
-  // ── estadísticas ─────────────────────────────────────────────────────────
+  // ── estadísticas ──────────────────────────────────────────────────────────────────────────────
   const { soldCount, reservedByOthersCount, availableCount } = useMemo(() => {
     let sold = 0, reserved = 0;
     const now = new Date();
@@ -452,7 +451,13 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
   const isStripePayment = raffle.payment_method === 'stripe';
   const formatTime = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
 
-  // ── virtual grid ──────────────────────────────────────────────────────────
+  // ── virtual grid ──────────────────────────────────────────────────────────────────────────────
+
+  // Dígitos según el número más alto del sorteo — defined first so renderTicketButton can reference it
+  const formatTicketNumber = (n: number, total: number): string => {
+    const maxNum = START + total - 1;
+    return n.toString().padStart(maxNum.toString().length, '0');
+  };
 
   const renderTicketButton = (num: number) => {
     const badge = hasBadge(num);
@@ -471,13 +476,6 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
     );
   };
 
-  // Modo búsqueda: mostrar solo el número exacto + vecinos
-  // Dígitos según el número más alto del sorteo
-  const formatTicketNumber = (n: number, total: number): string => {
-    const maxNum = START + total - 1;
-    return n.toString().padStart(maxNum.toString().length, '0');
-  };
-
   const searchResults = useMemo(() => {
     if (!searchNumber) return null;
     const n = parseInt(searchNumber);
@@ -491,7 +489,7 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
     return matches;
   }, [searchNumber, raffle.total_tickets]);
 
-  // ── render ────────────────────────────────────────────────────────────────
+  // ── render ──────────────────────────────────────────────────────────────────────────────────
   // Fotos del sorteo — compatibilidad con image_url (legacy) e image_urls (nuevo)
   const rafflePhotos: string[] = Array.isArray((raffle as any).image_urls)
     ? (raffle as any).image_urls.filter(Boolean)
@@ -950,4 +948,3 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
 };
 
 export default TicketGrid;
-
