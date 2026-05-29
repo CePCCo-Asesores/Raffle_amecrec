@@ -127,9 +127,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (data.user) {
-        // El onAuthStateChange se encarga de hacer setUser — solo mostramos toast
-        const profile = await fetchProfile(data.user.id);
-        toast({ title: 'Bienvenido', description: `Hola de nuevo, ${profile?.full_name || email}!` });
+        // onAuthStateChange loads the profile — use metadata for the toast to avoid a double fetch
+        const fullName = data.user.user_metadata?.full_name || email;
+        toast({ title: 'Bienvenido', description: `Hola de nuevo, ${fullName}!` });
         return true;
       }
       return false;

@@ -16,25 +16,25 @@ import RaffleExplorer from '@/components/participant/RaffleExplorer';
 import TicketGrid from '@/components/participant/TicketGrid';
 import NotificationPreferencesPage from '@/components/settings/NotificationPreferences';
 
-class ErrorBoundary extends React.Component<{children: React.ReactNode}, {error: string | null}> {
+class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean}> {
   constructor(props: any) {
     super(props);
-    this.state = { error: null };
+    this.state = { hasError: false };
   }
-  static getDerivedStateFromError(error: any) {
-    return { error: error?.message ?? String(error) };
+  static getDerivedStateFromError() {
+    return { hasError: true };
   }
   render() {
-    if (this.state.error) {
+    if (this.state.hasError) {
       return (
         <div className="min-h-screen flex items-center justify-center bg-gray-50 p-8">
           <div className="max-w-lg w-full bg-white rounded-2xl border border-red-200 p-6 text-center">
             <div className="text-4xl mb-4">⚠️</div>
             <h2 className="text-lg font-bold text-gray-900 mb-2">Error en la aplicación</h2>
-            <pre className="text-xs text-red-600 bg-red-50 rounded-lg p-3 text-left overflow-auto mb-4">
-              {this.state.error}
-            </pre>
-            <button onClick={() => { this.setState({ error: null }); window.location.reload(); }}
+            <p className="text-sm text-gray-500 mb-4">
+              Ha ocurrido un error inesperado. Por favor, recarga la página.
+            </p>
+            <button onClick={() => { this.setState({ hasError: false }); window.location.reload(); }}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium">
               Recargar
             </button>
@@ -80,6 +80,17 @@ const AppLayout: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, loading]); // currentView NO va en deps: solo reaccionar al cambio de auth
 
+  // Redirección cuando falta viewData requerido
+  useEffect(() => {
+    if (currentView === 'organizer-closing-flow' && !viewData?.raffle) {
+      navigateTo('organizer-dashboard');
+    }
+    if (currentView === 'raffle-detail' && !viewData?.raffle) {
+      navigateTo('raffle-explorer');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentView, viewData?.raffle]);
+
   const handleSelectRaffle = (raffle: Raffle) => {
     navigateTo('raffle-detail', { raffle });
   };
@@ -105,24 +116,15 @@ const AppLayout: React.FC = () => {
         );
 
       case 'admin-dashboard':
-        if (!user || user.role !== 'admin') {
-          navigateTo('landing');
-          return null;
-        }
+        if (!user || user.role !== 'admin') return null;
         return <AdminDashboard />;
 
       case 'organizer-dashboard':
-        if (!user || user.role !== 'organizer') {
-          navigateTo('landing');
-          return null;
-        }
+        if (!user || user.role !== 'organizer') return null;
         return <OrganizerDashboard onNavigate={navigateTo} />;
 
       case 'organizer-create-raffle':
-        if (!user || user.role !== 'organizer') {
-          navigateTo('landing');
-          return null;
-        }
+        if (!user || user.role !== 'organizer') return null;
         return (
           <CreateRaffleForm
             onBack={() => navigateTo('organizer-dashboard')}
@@ -131,14 +133,8 @@ const AppLayout: React.FC = () => {
         );
 
       case 'organizer-closing-flow':
-        if (!user || user.role !== 'organizer') {
-          navigateTo('landing');
-          return null;
-        }
-        if (!viewData?.raffle) {
-          navigateTo('organizer-dashboard');
-          return null;
-        }
+        if (!user || user.role !== 'organizer') return null;
+        if (!viewData?.raffle) return null;
         return (
           <RaffleClosingFlow
             raffle={viewData.raffle}
@@ -150,20 +146,14 @@ const AppLayout: React.FC = () => {
 
 
       case 'participant-dashboard':
-        if (!user || user.role !== 'participant') {
-          navigateTo('landing');
-          return null;
-        }
+        if (!user || user.role !== 'participant') return null;
         return <ParticipantDashboard onNavigate={navigateTo} />;
 
       case 'raffle-explorer':
         return <RaffleExplorer onSelectRaffle={handleSelectRaffle} />;
 
       case 'raffle-detail':
-        if (!viewData?.raffle) {
-          navigateTo('raffle-explorer');
-          return null;
-        }
+        if (!viewData?.raffle) return null;
         return (
           <TicketGrid
             raffle={viewData.raffle}
@@ -172,10 +162,7 @@ const AppLayout: React.FC = () => {
         );
 
       case 'notification-preferences':
-        if (!user) {
-          navigateTo('landing');
-          return null;
-        }
+        if (!user) return null;
         return (
           <NotificationPreferencesPage
             onBack={() => navigateTo(getDashboardView() as any)}

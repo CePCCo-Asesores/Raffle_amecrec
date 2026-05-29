@@ -81,23 +81,17 @@ export async function createLedgerEntry(params: {
 // RAFFLE RESULT LOG (Immutability)
 // ============================================================
 
-function generateResultHash(data: {
+async function generateResultHash(data: {
   raffleId: string;
   winningNumber: number;
   lotteryType: string;
   lotteryDrawNumber: string;
   registeredBy: string;
   timestamp: string;
-}): string {
-  // Simple hash for tamper detection (in production, use crypto.subtle)
+}): Promise<string> {
   const str = JSON.stringify(data);
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash; // Convert to 32bit integer
-  }
-  return Math.abs(hash).toString(16).padStart(8, '0') + '-' + Date.now().toString(16);
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 export async function createResultLog(params: {
@@ -112,7 +106,7 @@ export async function createResultLog(params: {
   changeReason?: string;
 }): Promise<{ success: boolean; resultId?: string; error?: string }> {
   const timestamp = new Date().toISOString();
-  const resultHash = generateResultHash({
+  const resultHash = await generateResultHash({
     raffleId: params.raffleId,
     winningNumber: params.winningNumber,
     lotteryType: params.lotteryType,
