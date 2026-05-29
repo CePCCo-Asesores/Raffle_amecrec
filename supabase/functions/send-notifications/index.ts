@@ -8,11 +8,10 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": Deno.env.get("ALLOWED_ORIGIN") || "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Cliente con service_role para operaciones internas
 function getAdminClient() {
   return createClient(
     Deno.env.get("SUPABASE_URL")!,
@@ -21,7 +20,9 @@ function getAdminClient() {
 }
 
 // ============================================================
-// Envío de email via Resend (o simplemente loguear si no hay key)
+// Envío de email via Resend
+// Inserta con status='pending', actualiza por ID para evitar
+// actualizar el registro equivocado en condiciones de concurrencia
 // ============================================================
 async function sendEmail(params: {
   to: string;
@@ -35,24 +36,25 @@ async function sendEmail(params: {
   const supabase = getAdminClient();
   const resendKey = Deno.env.get("RESEND_API_KEY");
 
-  // Loguear en email_log siempre
-  await supabase.from("email_log").insert({
+  // Insertar con status 'pending'; actualizar por ID tras conocer el resultado
+  const { data: logEntry } = await supabase.from("email_log").insert({
     recipient_email:   params.to,
     recipient_user_id: params.userId || null,
     email_type:        params.emailType,
     subject:           params.subject,
     raffle_id:         params.raffleId || null,
-    status:            resendKey ? "sent" : "sent", // marcar sent; en producción verificar delivery
+    status:            "pending",
     metadata:          params.metadata || null,
-  });
+  }).select("id").single();
 
-  // Si no hay API key de Resend, solo logueamos (modo desarrollo)
   if (!resendKey) {
+    if (logEntry?.id) {
+      await supabase.from("email_log").update({ status: "sent" }).eq("id", logEntry.id);
+    }
     console.log(`[EMAIL] To: ${params.to} | Subject: ${params.subject}`);
     return { success: true };
   }
 
-  // Enviar via Resend
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
@@ -70,15 +72,15 @@ async function sendEmail(params: {
   if (!res.ok) {
     const err = await res.text();
     console.error("Resend error:", err);
-    await supabase.from("email_log")
-      .update({ status: "failed", error_message: err })
-      .eq("recipient_email", params.to)
-      .eq("email_type", params.emailType)
-      .order("created_at", { ascending: false })
-      .limit(1);
+    if (logEntry?.id) {
+      await supabase.from("email_log").update({ status: "failed", error_message: err }).eq("id", logEntry.id);
+    }
     return { success: false, error: err };
   }
 
+  if (logEntry?.id) {
+    await supabase.from("email_log").update({ status: "sent" }).eq("id", logEntry.id);
+  }
   return { success: true };
 }
 
@@ -205,29 +207,33 @@ async function handleGetEmailLog(userId: string) {
   return { logs: data || [] };
 }
 
-async function handleTicketPurchase(body: {
+async function handleTicketPurchase(requesterId: string, body: {
   user_id: string;
   raffle_id: string;
   ticket_numbers: number[];
   amount: number;
   payment_method: string;
 }) {
-  const supabase = getAdminClient();
+  // Validate that the requester is sending notifications for themselves
+  if (body.user_id && body.user_id !== requesterId) {
+    return { error: "No autorizado: user_id no coincide con el token" };
+  }
 
-  // Verificar preferencias
+  const supabase = getAdminClient();
+  const userId = body.user_id || requesterId;
+
   const { data: prefs } = await supabase
     .from("notification_preferences")
     .select("ticket_purchase_email")
-    .eq("user_id", body.user_id)
+    .eq("user_id", userId)
     .single();
 
   if (prefs && prefs.ticket_purchase_email === false) {
     return { success: true, skipped: true };
   }
 
-  // Obtener datos del usuario y rifa
   const [{ data: user }, { data: raffle }] = await Promise.all([
-    supabase.from("profiles").select("full_name, email").eq("id", body.user_id).single(),
+    supabase.from("profiles").select("full_name, email").eq("id", userId).single(),
     supabase.from("raffles").select("name").eq("id", body.raffle_id).single(),
   ]);
 
@@ -244,13 +250,12 @@ async function handleTicketPurchase(body: {
       paymentMethod: body.payment_method,
     }),
     emailType: "ticket_purchase",
-    userId:    body.user_id,
+    userId,
     raffleId:  body.raffle_id,
   });
 
-  // Notificación in-app
   await supabase.from("notifications").insert({
-    user_id:           body.user_id,
+    user_id:           userId,
     title:             "Compra exitosa",
     message:           `Adquiriste ${body.ticket_numbers.length} boleto(s) para ${raffle.name}.`,
     type:              "success",
@@ -260,9 +265,10 @@ async function handleTicketPurchase(body: {
   return { success: true };
 }
 
-async function handleRaffleClosed(body: { raffle_id: string }) {
+async function handleRaffleClosed(requesterId: string, body: { raffle_id: string }) {
   const supabase = getAdminClient();
 
+  // Verify the requester is the organizer of this raffle
   const { data: raffle } = await supabase
     .from("raffles")
     .select("name, draw_date, organizer_id")
@@ -271,7 +277,11 @@ async function handleRaffleClosed(body: { raffle_id: string }) {
 
   if (!raffle) return { success: false, error: "Rifa no encontrada" };
 
-  // Obtener participantes únicos con sus preferencias
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", requesterId).single();
+  if (profile?.role !== "admin" && raffle.organizer_id !== requesterId) {
+    return { error: "No autorizado para enviar notificaciones de esta rifa" };
+  }
+
   const { data: participants } = await supabase
     .from("tickets")
     .select("participant_id, profiles!participant_id(full_name, email)")
@@ -316,7 +326,7 @@ async function handleRaffleClosed(body: { raffle_id: string }) {
   return { success: true };
 }
 
-async function handleWinnerDeclared(body: {
+async function handleWinnerDeclared(requesterId: string, body: {
   raffle_id: string;
   winning_number: number;
   result_hash?: string;
@@ -325,13 +335,17 @@ async function handleWinnerDeclared(body: {
 
   const { data: raffle } = await supabase
     .from("raffles")
-    .select("name")
+    .select("name, organizer_id")
     .eq("id", body.raffle_id)
     .single();
 
   if (!raffle) return { success: false, error: "Rifa no encontrada" };
 
-  // Obtener todos los participantes
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", requesterId).single();
+  if (profile?.role !== "admin" && raffle.organizer_id !== requesterId) {
+    return { error: "No autorizado para enviar notificaciones de esta rifa" };
+  }
+
   const { data: participants } = await supabase
     .from("tickets")
     .select("participant_id, ticket_number, profiles!participant_id(full_name, email)")
@@ -388,6 +402,39 @@ async function handleWinnerDeclared(body: {
   return { success: true };
 }
 
+async function handleExternalPaymentRequest(requesterId: string, body: {
+  raffle_id: string;
+  ticket_numbers: number[];
+}) {
+  const supabase = getAdminClient();
+
+  const { data: raffle } = await supabase
+    .from("raffles")
+    .select("name, organizer_id")
+    .eq("id", body.raffle_id)
+    .single();
+
+  if (!raffle) return { success: false, error: "Rifa no encontrada" };
+
+  const { data: participant } = await supabase
+    .from("profiles")
+    .select("full_name")
+    .eq("id", requesterId)
+    .single();
+
+  const ticketList = body.ticket_numbers.map((n) => `#${n}`).join(", ");
+
+  await supabase.from("notifications").insert({
+    user_id:           raffle.organizer_id,
+    title:             "Solicitud de confirmación de pago externo",
+    message:           `${participant?.full_name || "Un participante"} solicita confirmar el pago de ${body.ticket_numbers.length} boleto(s) para "${raffle.name}": ${ticketList}.`,
+    type:              "info",
+    related_raffle_id: body.raffle_id,
+  });
+
+  return { success: true };
+}
+
 // ============================================================
 // Handler principal
 // ============================================================
@@ -397,7 +444,6 @@ serve(async (req) => {
   }
 
   try {
-    // Obtener usuario autenticado
     const authHeader = req.headers.get("Authorization");
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -426,13 +472,20 @@ serve(async (req) => {
         result = await handleGetEmailLog(userId);
         break;
       case "ticket-purchase":
-        result = await handleTicketPurchase(body);
+        if (!userId) throw new Error("No autenticado");
+        result = await handleTicketPurchase(userId, body);
         break;
       case "raffle-closed":
-        result = await handleRaffleClosed(body);
+        if (!userId) throw new Error("No autenticado");
+        result = await handleRaffleClosed(userId, body);
         break;
       case "winner-declared":
-        result = await handleWinnerDeclared(body);
+        if (!userId) throw new Error("No autenticado");
+        result = await handleWinnerDeclared(userId, body);
+        break;
+      case "external-payment-request":
+        if (!userId) throw new Error("No autenticado");
+        result = await handleExternalPaymentRequest(userId, body);
         break;
       default:
         result = { error: "Acción no reconocida: " + action };

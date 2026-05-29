@@ -8,7 +8,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": Deno.env.get("ALLOWED_ORIGIN") || "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
@@ -28,7 +28,6 @@ async function handleRequestRefund(userId: string, body: {
 }) {
   const supabase = getAdminClient();
 
-  // Obtener datos del boleto
   const { data: ticket, error: ticketErr } = await supabase
     .from("tickets")
     .select(`
@@ -43,14 +42,12 @@ async function handleRequestRefund(userId: string, body: {
     return { error: "Boleto no encontrado" };
   }
 
-  // Validar que el boleto pertenece al usuario
   if (ticket.participant_id !== userId) {
     return { error: "No tienes permiso para solicitar reembolso de este boleto" };
   }
 
   const raffle = ticket.raffles as any;
 
-  // Solo se pueden pedir reembolsos de rifas no terminadas
   if (["winner_declared", "cancelled"].includes(raffle.status)) {
     if (raffle.status === "cancelled") {
       // Rifas canceladas: reembolso automático permitido
@@ -63,7 +60,6 @@ async function handleRequestRefund(userId: string, body: {
     return { error: "Solo se pueden reembolsar boletos comprados o pagados" };
   }
 
-  // Verificar que no exista ya una solicitud activa
   const { data: existing } = await supabase
     .from("refund_requests")
     .select("id, status")
@@ -75,10 +71,8 @@ async function handleRequestRefund(userId: string, body: {
     return { error: "Ya existe una solicitud de reembolso activa para este boleto" };
   }
 
-  // Calcular monto del reembolso
   const amount = raffle.price_per_ticket;
 
-  // Crear solicitud
   const { data: refundRequest, error: insertErr } = await supabase
     .from("refund_requests")
     .insert({
@@ -100,7 +94,6 @@ async function handleRequestRefund(userId: string, body: {
     return { error: insertErr.message };
   }
 
-  // Notificar al organizador
   await supabase.from("notifications").insert({
     user_id: raffle.organizer_id,
     title:   "Nueva solicitud de reembolso",
@@ -109,7 +102,6 @@ async function handleRequestRefund(userId: string, body: {
     related_raffle_id: raffle.id,
   });
 
-  // Audit log
   await supabase.from("audit_log").insert({
     user_id:     userId,
     action:      "refund_requested",
@@ -131,7 +123,6 @@ async function handleListRefundRequests(userId: string, body: {
 }) {
   const supabase = getAdminClient();
 
-  // Obtener rol del usuario
   const { data: profile } = await supabase
     .from("profiles")
     .select("role")
@@ -154,7 +145,6 @@ async function handleListRefundRequests(userId: string, body: {
   } else if (role === "organizer") {
     query = query.eq("organizer_id", userId);
   }
-  // admin ve todo
 
   if (body.raffle_id) query = query.eq("raffle_id", body.raffle_id);
   if (body.status)    query = query.eq("status", body.status);
@@ -163,13 +153,12 @@ async function handleListRefundRequests(userId: string, body: {
 
   if (error) return { requests: [], error: error.message };
 
-  // Enriquecer datos
   const enriched = (requests || []).map((r: any) => ({
     ...r,
-    participant_name:     r.profiles?.full_name,
-    participant_email:    r.profiles?.email,
-    raffle_name:          r.raffles?.name,
-    raffle_status:        r.raffles?.status,
+    participant_name:      r.profiles?.full_name,
+    participant_email:     r.profiles?.email,
+    raffle_name:           r.raffles?.name,
+    raffle_status:         r.raffles?.status,
     raffle_payment_method: r.raffles?.payment_method,
   }));
 
@@ -195,7 +184,6 @@ async function handleApproveRefund(userId: string, body: {
 
   const raffle = refund.raffles as any;
 
-  // Solo el organizador o admin puede aprobar
   const { data: profile } = await supabase.from("profiles").select("role").eq("id", userId).single();
   if (profile?.role !== "admin" && raffle.organizer_id !== userId) {
     return { error: "Sin permiso para aprobar esta solicitud" };
@@ -205,7 +193,19 @@ async function handleApproveRefund(userId: string, body: {
     return { error: `No se puede aprobar una solicitud en estado "${refund.status}"` };
   }
 
-  // Para pagos externos: marcar como reembolsado directamente (el organizador hace el reembolso manual)
+  // Verificar que la rifa permite modificar boletos (no puede estar en estado terminal)
+  const { data: raffleData } = await supabase
+    .from("raffles")
+    .select("status, tickets_sold, revenue")
+    .eq("id", refund.raffle_id)
+    .single();
+
+  if (!raffleData) return { error: "Rifa no encontrada" };
+
+  if (["locked", "winner_declared"].includes(raffleData.status)) {
+    return { error: "No se puede procesar el reembolso de una rifa en estado terminal (bloqueada o con ganador declarado)" };
+  }
+
   const newStatus = raffle.payment_method === "external" ? "refunded" : "approved";
 
   await supabase.from("refund_requests").update({
@@ -225,14 +225,13 @@ async function handleApproveRefund(userId: string, body: {
     payment_method: null,
   }).eq("id", refund.ticket_id);
 
-  // Actualizar contadores de la rifa
+  // Actualizar contadores de la rifa de forma segura (evitar pasar builders como valores)
   await supabase.from("raffles").update({
-    tickets_sold: supabase.rpc("greatest", { a: 0, b: -1 }), // decrement safely
-    revenue:      supabase.rpc("greatest", { a: 0, b: -refund.amount }),
+    tickets_sold: Math.max(0, raffleData.tickets_sold - 1),
+    revenue:      Math.max(0, Number(raffleData.revenue) - Number(refund.amount)),
     updated_at:   new Date().toISOString(),
   }).eq("id", refund.raffle_id);
 
-  // Notificar al participante
   await supabase.from("notifications").insert({
     user_id: refund.participant_id,
     title:   newStatus === "refunded" ? "Reembolso aprobado" : "Solicitud aprobada",
@@ -243,7 +242,6 @@ async function handleApproveRefund(userId: string, body: {
     related_raffle_id: refund.raffle_id,
   });
 
-  // Ledger de reembolso
   await supabase.from("financial_ledger").insert({
     entry_type:   "refund",
     amount:       refund.amount,
@@ -301,7 +299,6 @@ async function handleDenyRefund(userId: string, body: {
     updated_at:      new Date().toISOString(),
   }).eq("id", body.refund_request_id);
 
-  // Notificar al participante
   await supabase.from("notifications").insert({
     user_id: refund.participant_id,
     title:   "Solicitud de reembolso rechazada",

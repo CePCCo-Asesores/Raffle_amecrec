@@ -8,7 +8,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": Deno.env.get("ALLOWED_ORIGIN") || "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
@@ -44,7 +44,6 @@ async function handleCreateDispute(userId: string, body: {
     return { error: "Solo se pueden disputar solicitudes rechazadas" };
   }
 
-  // Verificar que no exista disputa activa
   const { data: existing } = await supabase
     .from("disputes")
     .select("id")
@@ -75,7 +74,6 @@ async function handleCreateDispute(userId: string, body: {
 
   if (insertErr) return { error: insertErr.message };
 
-  // Mensaje inicial del sistema
   await supabase.from("dispute_messages").insert({
     dispute_id:   dispute.id,
     sender_id:    userId,
@@ -86,7 +84,6 @@ async function handleCreateDispute(userId: string, body: {
     is_internal:  false,
   });
 
-  // Notificar a admins
   const { data: admins } = await supabase
     .from("profiles")
     .select("id")
@@ -103,7 +100,6 @@ async function handleCreateDispute(userId: string, body: {
     });
   }
 
-  // Notificar al organizador
   await supabase.from("notifications").insert({
     user_id: raffle.organizer_id,
     title:   "Disputa abierta",
@@ -152,7 +148,6 @@ async function handleListDisputes(userId: string, body: { status?: string }) {
   } else if (profile?.role === "organizer") {
     query = query.eq("organizer_id", userId);
   }
-  // admin ve todo
 
   if (body.status) query = query.eq("status", body.status);
 
@@ -161,14 +156,14 @@ async function handleListDisputes(userId: string, body: { status?: string }) {
 
   const enriched = (disputes || []).map((d: any) => ({
     ...d,
-    participant_name:      d.participant?.full_name,
-    participant_email:     d.participant?.email,
-    organizer_name:        d.organizer?.full_name,
-    organizer_email:       d.organizer?.email,
-    assigned_admin_name:   d.assigned_admin?.full_name,
-    raffle_name:           d.raffle?.name,
-    raffle_status:         d.raffle?.status,
-    refund_reason:         d.refund?.reason,
+    participant_name:       d.participant?.full_name,
+    participant_email:      d.participant?.email,
+    organizer_name:         d.organizer?.full_name,
+    organizer_email:        d.organizer?.email,
+    assigned_admin_name:    d.assigned_admin?.full_name,
+    raffle_name:            d.raffle?.name,
+    raffle_status:          d.raffle?.status,
+    refund_reason:          d.refund?.reason,
     refund_organizer_notes: d.refund?.organizer_notes,
   }));
 
@@ -197,7 +192,6 @@ async function handleGetDisputeDetail(userId: string, body: { dispute_id: string
 
   if (error || !dispute) return { error: "Disputa no encontrada" };
 
-  // Verificar acceso
   if (profile?.role === "participant" && dispute.participant_id !== userId) {
     return { error: "Sin acceso" };
   }
@@ -205,7 +199,6 @@ async function handleGetDisputeDetail(userId: string, body: { dispute_id: string
     return { error: "Sin acceso" };
   }
 
-  // Mensajes (internos solo para admin)
   let msgQuery = supabase
     .from("dispute_messages")
     .select("*")
@@ -246,7 +239,6 @@ async function handleAddMessage(userId: string, body: {
     return { error: "No se pueden agregar mensajes a una disputa cerrada" };
   }
 
-  // Verificar que el usuario es parte de la disputa o es admin
   const isParticipant = dispute.participant_id === userId;
   const isOrganizer   = dispute.organizer_id === userId;
   const isAdmin       = profile?.role === "admin";
@@ -274,7 +266,6 @@ async function handleAddMessage(userId: string, body: {
 
   if (msgErr) return { error: msgErr.message };
 
-  // Notificar a las otras partes
   const notifyIds = [];
   if (!isParticipant) notifyIds.push(dispute.participant_id);
   if (!isOrganizer)   notifyIds.push(dispute.organizer_id);
@@ -329,24 +320,21 @@ async function handleResolveDispute(userId: string, body: {
     updated_at:         new Date().toISOString(),
   }).eq("id", body.dispute_id);
 
-  // Si se resuelve a favor del participante con fuerza de reembolso
   if (body.resolution === "participant" && body.force_refund) {
     await supabase.from("refund_requests").update({
-      status:     "refunded",
-      reviewed_by: userId,
-      reviewed_at: new Date().toISOString(),
-      refunded_at: new Date().toISOString(),
-      updated_at:  new Date().toISOString(),
+      status:      "refunded",
+      reviewed_by:  userId,
+      reviewed_at:  new Date().toISOString(),
+      refunded_at:  new Date().toISOString(),
+      updated_at:   new Date().toISOString(),
     }).eq("id", dispute.refund_request_id);
 
-    // Liberar boleto
     await supabase.from("tickets").update({
       status:         "available",
       participant_id: null,
       purchased_at:   null,
     }).eq("id", dispute.ticket_id);
 
-    // Ledger
     await supabase.from("financial_ledger").insert({
       entry_type:  "refund",
       amount:      dispute.amount,
@@ -359,7 +347,6 @@ async function handleResolveDispute(userId: string, body: {
     });
   }
 
-  // Mensaje de resolución
   await supabase.from("dispute_messages").insert({
     dispute_id:   body.dispute_id,
     sender_id:    userId,
@@ -370,11 +357,8 @@ async function handleResolveDispute(userId: string, body: {
     is_internal:  false,
   });
 
-  // Notificar a ambas partes
   const raffle = dispute.raffles as any;
-  const decisionText = body.resolution === "participant"
-    ? "a tu favor"
-    : "a favor del organizador";
+  const decisionText = body.resolution === "participant" ? "a tu favor" : "a favor del organizador";
 
   await supabase.from("notifications").insert([
     {
@@ -417,12 +401,12 @@ async function handleGetStats(userId: string) {
 
   return {
     stats: {
-      total:                 rows.length,
-      open:                  rows.filter((r: any) => r.status === "open").length,
-      under_review:          rows.filter((r: any) => r.status === "under_review").length,
-      resolved_participant:  rows.filter((r: any) => r.status === "resolved_participant").length,
-      resolved_organizer:    rows.filter((r: any) => r.status === "resolved_organizer").length,
-      closed:                rows.filter((r: any) => r.status === "closed").length,
+      total:                rows.length,
+      open:                 rows.filter((r: any) => r.status === "open").length,
+      under_review:         rows.filter((r: any) => r.status === "under_review").length,
+      resolved_participant: rows.filter((r: any) => r.status === "resolved_participant").length,
+      resolved_organizer:   rows.filter((r: any) => r.status === "resolved_organizer").length,
+      closed:               rows.filter((r: any) => r.status === "closed").length,
     },
   };
 }
@@ -448,6 +432,45 @@ async function handleAssignAdmin(userId: string, body: { dispute_id: string }) {
     message:      "Esta disputa ha sido tomada bajo revisión por un administrador.",
     message_type: "status_change",
     is_internal:  false,
+  });
+
+  return { success: true };
+}
+
+// ============================================================
+// UPDATE STATUS — Admin actualiza estado sin resolver (ej. under_review)
+// ============================================================
+async function handleUpdateStatus(userId: string, body: {
+  dispute_id: string;
+  new_status: string;
+  admin_notes?: string;
+}) {
+  const supabase = getAdminClient();
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", userId).single();
+  if (profile?.role !== "admin") return { error: "Solo administradores pueden actualizar el estado" };
+
+  const validStatuses = ["open", "under_review", "resolved_participant", "resolved_organizer", "closed"];
+  if (!validStatuses.includes(body.new_status)) {
+    return { error: "Estado no válido" };
+  }
+
+  const { error: updateErr } = await supabase
+    .from("disputes")
+    .update({
+      status:     body.new_status,
+      admin_notes: body.admin_notes,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", body.dispute_id);
+
+  if (updateErr) return { error: updateErr.message };
+
+  await supabase.from("audit_log").insert({
+    user_id:     userId,
+    action:      "dispute_status_updated",
+    entity_type: "dispute",
+    entity_id:   body.dispute_id,
+    new_value:   { status: body.new_status, admin_notes: body.admin_notes },
   });
 
   return { success: true };
@@ -497,10 +520,23 @@ serve(async (req) => {
       case "resolve-dispute":
         result = await handleResolveDispute(user.id, body);
         break;
+      case "force-refund":
+        result = await handleResolveDispute(user.id, {
+          dispute_id:         body.dispute_id,
+          resolution:         "participant",
+          admin_notes:        body.admin_notes || "",
+          force_refund:       true,
+          resolution_summary: body.admin_decision || "Reembolso forzado por administrador",
+        });
+        break;
+      case "update-status":
+        result = await handleUpdateStatus(user.id, body);
+        break;
       case "assign-admin":
         result = await handleAssignAdmin(user.id, body);
         break;
       case "get-stats":
+      case "dispute-stats":
         result = await handleGetStats(user.id);
         break;
       default:
