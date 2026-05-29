@@ -37,7 +37,11 @@ BEGIN
     NEW.id,
     NEW.email,
     COALESCE(NEW.raw_user_meta_data->>'full_name', ''),
-    COALESCE(NEW.raw_user_meta_data->>'role', 'participant')
+    CASE
+      WHEN NEW.raw_user_meta_data->>'role' IN ('participant', 'organizer')
+      THEN NEW.raw_user_meta_data->>'role'
+      ELSE 'participant'
+    END
   )
   ON CONFLICT (id) DO NOTHING;
   RETURN NEW;
@@ -312,7 +316,7 @@ CREATE TABLE IF NOT EXISTS email_log (
   subject             TEXT NOT NULL,
   raffle_id           UUID REFERENCES raffles(id) ON DELETE SET NULL,
   status              TEXT NOT NULL DEFAULT 'sent'
-                        CHECK (status IN ('sent','delivered','failed','bounced')),
+                        CHECK (status IN ('sent','delivered','failed','bounced','pending')),
   error_message       TEXT,
   metadata            JSONB,
   created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()

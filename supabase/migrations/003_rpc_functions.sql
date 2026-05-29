@@ -218,6 +218,7 @@ $$;
 -- ============================================================
 -- RPC: buy_ticket
 -- Compra de un solo boleto (versión simplificada)
+-- NOTE: Prefer atomic_purchase_tickets for full ledger support.
 -- ============================================================
 CREATE OR REPLACE FUNCTION buy_ticket(
   p_raffle_id     UUID,
@@ -240,6 +241,9 @@ BEGIN
 
   IF v_rows > 0 THEN
     UPDATE raffles SET tickets_sold = tickets_sold + 1, updated_at = NOW() WHERE id = p_raffle_id;
+    INSERT INTO audit_log (user_id, action, entity_type, entity_id, new_value)
+    VALUES (p_user_id, 'ticket_purchase', 'ticket', p_raffle_id,
+      jsonb_build_object('ticket_number', p_ticket_number));
   END IF;
 
   RETURN jsonb_build_object('success', v_rows > 0);
@@ -414,6 +418,7 @@ $$;
 -- ============================================================
 -- RPC: finalize_draw
 -- Declara el ganador (locked → winner_declared) — IRREVERSIBLE
+-- Numeración 0-based: boletos válidos de 0 a total_tickets-1
 -- ============================================================
 CREATE OR REPLACE FUNCTION finalize_draw(
   p_raffle_id      UUID,
@@ -444,8 +449,9 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'error', 'WINNER_ALREADY_DECLARED');
   END IF;
 
-  IF p_winning_number < 1 OR p_winning_number > v_raffle.total_tickets THEN
-    RETURN jsonb_build_object('success', false, 'error', 'INVALID_NUMBER', 'max', v_raffle.total_tickets);
+  -- Validación 0-based: boletos numerados de 0 a total_tickets-1
+  IF p_winning_number < 0 OR p_winning_number > v_raffle.total_tickets - 1 THEN
+    RETURN jsonb_build_object('success', false, 'error', 'INVALID_NUMBER', 'max', v_raffle.total_tickets - 1);
   END IF;
 
   -- Generar hash SHA-256 del resultado
