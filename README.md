@@ -1,6 +1,6 @@
-# RifaMax AMECREC — Sistema de Rifas Digitales
+# Lottero — Sistema de Rifas Digitales
 
-Plataforma de rifas benéficas para AMECREC A.C. con soporte para pago externo, notificaciones, reembolsos y sistema de disputas.
+Plataforma de rifas digitales con soporte para pago externo, notificaciones, reembolsos y sistema de disputas.
 
 ---
 

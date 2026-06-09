@@ -398,7 +398,7 @@ const CreateRaffleForm: React.FC<CreateRaffleFormProps> = ({ onBack, onCreated }
           </button>
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Crear Nuevo Sorteo</h1>
-            <p className="text-gray-500 text-sm">Completa los pasos para configurar tu sorteo — Sorteos AMECREC</p>
+            <p className="text-gray-500 text-sm">Completa los pasos para configurar tu sorteo — Lottero</p>
           </div>
         </div>
 

@@ -107,7 +107,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           full_name: fullName,
           role,
         });
-        toast({ title: 'Registro exitoso', description: `Bienvenido a Sorteos AMECREC, ${fullName}!` });
+        toast({ title: 'Registro exitoso', description: `Bienvenido a Lottero, ${fullName}!` });
         return true;
       }
       return false;

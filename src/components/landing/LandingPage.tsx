@@ -146,7 +146,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onExplore }) => {
                   <div className="w-3 h-3 rounded-full bg-red-400" />
                   <div className="w-3 h-3 rounded-full bg-yellow-400" />
                   <div className="w-3 h-3 rounded-full bg-green-400" />
-                  <span className="text-white/50 text-xs ml-2">Panel del Organizador — Sorteos AMECREC</span>
+                  <span className="text-white/50 text-xs ml-2">Panel del Organizador — Lottero</span>
                 </div>
                 <div className="grid grid-cols-3 gap-3 mb-4">
                   {[
@@ -359,7 +359,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onExplore }) => {
             <div className="relative">
               <h2 className="text-3xl sm:text-4xl font-extrabold text-white mb-4">¿Listo para Organizar tu Primer Sorteo?</h2>
               <p className="text-blue-200 text-lg mb-8 max-w-xl mx-auto">
-                Únete a miles de organizadores que confían en Sorteos AMECREC para gestionar sus sorteos digitales con seguridad total.
+                Únete a miles de organizadores que confían en Lottero para gestionar sus sorteos digitales con seguridad total.
               </p>
               <button
                 onClick={() => onOpenAuth('register')}
@@ -377,14 +377,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onExplore }) => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
             <div className="col-span-2 md:col-span-1">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
-                  <Trophy className="w-4 h-4 text-white" />
-                </div>
-                <div>
-                  <span className="text-sm font-bold text-white block leading-tight">Sorteos AMECREC</span>
-                  <span className="text-[9px] text-gray-500 tracking-wider">PLATAFORMA DE RIFAS</span>
-                </div>
+              <div className="mb-4">
+                <img src="/logo.png" alt="Lottero" className="h-12 w-auto object-contain" />
               </div>
               <p className="text-sm leading-relaxed">Plataforma de gestión de sorteos digitales vinculados a Lotería Nacional con seguridad de grado empresarial.</p>
             </div>
@@ -421,7 +415,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onExplore }) => {
           </div>
 
           <div className="border-t border-gray-800 pt-8 flex flex-col sm:flex-row justify-between items-center gap-4">
-            <p className="text-sm">&copy; {new Date().getFullYear()} Sorteos AMECREC · AMECREC A.C. · Todos los derechos reservados.</p>
+            <p className="text-sm">&copy; {new Date().getFullYear()} Lottero · Todos los derechos reservados.</p>
           </div>
         </div>
       </footer>
@@ -483,19 +477,19 @@ const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onExplore }) => {
                 <div className="prose prose-sm max-w-none text-gray-600 space-y-4">
                   <p className="text-xs text-gray-400">Última actualización: enero 2026</p>
                   <h3 className="font-bold text-gray-800">1. Objeto y aceptación</h3>
-                  <p>El uso de la plataforma Sorteos AMECREC implica la aceptación plena de estos Términos de Servicio. Si no los acepta, no utilice el servicio.</p>
+                  <p>El uso de la plataforma Lottero implica la aceptación plena de estos Términos de Servicio. Si no los acepta, no utilice el servicio.</p>
                   <h3 className="font-bold text-gray-800">2. Descripción del servicio</h3>
-                  <p>Sorteos AMECREC es una plataforma digital que permite a organizadores crear y gestionar sorteos vinculados a sorteos oficiales de Lotería Nacional, y a participantes adquirir boletos de manera segura.</p>
+                  <p>Lottero es una plataforma digital que permite a organizadores crear y gestionar sorteos vinculados a sorteos oficiales de Lotería Nacional, y a participantes adquirir boletos de manera segura.</p>
                   <h3 className="font-bold text-gray-800">3. Registro y cuentas</h3>
                   <p>Para acceder como organizador o participante es necesario crear una cuenta con información veraz. El usuario es responsable de la confidencialidad de sus credenciales.</p>
                   <h3 className="font-bold text-gray-800">4. Obligaciones del organizador</h3>
                   <p>El organizador garantiza que los sorteos que publique cumplen con la normativa aplicable en México (SEGOB, SAT) y que los premios ofrecidos existen y serán entregados al ganador verificado.</p>
                   <h3 className="font-bold text-gray-800">5. Pagos y comisiones</h3>
-                  <p>Los pagos se procesan mediante Stripe Connect o método externo según elección del organizador. AMECREC A.C. retiene una comisión fija por boleto vendido, registrada en el ledger contable de la plataforma.</p>
+                  <p>Los pagos se procesan mediante Stripe Connect o método externo según elección del organizador. Lottero retiene una comisión fija por boleto vendido, registrada en el ledger contable de la plataforma.</p>
                   <h3 className="font-bold text-gray-800">6. Reembolsos</h3>
                   <p>Los reembolsos aplican únicamente cuando el sorteo es cancelado por el organizador antes de la fecha de sorteo. Los boletos adquiridos en sorteos activos no son reembolsables salvo decisión expresa del organizador.</p>
                   <h3 className="font-bold text-gray-800">7. Limitación de responsabilidad</h3>
-                  <p>AMECREC A.C. actúa como plataforma tecnológica. La responsabilidad sobre el cumplimiento del premio corresponde exclusivamente al organizador.</p>
+                  <p>Lottero actúa como plataforma tecnológica. La responsabilidad sobre el cumplimiento del premio corresponde exclusivamente al organizador.</p>
                   <h3 className="font-bold text-gray-800">8. Jurisdicción</h3>
                   <p>Estos términos se rigen por las leyes de México. Para cualquier controversia las partes se someten a los tribunales competentes de Chihuahua, México.</p>
                 </div>
@@ -506,7 +500,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onExplore }) => {
                 <div className="prose prose-sm max-w-none text-gray-600 space-y-4">
                   <p className="text-xs text-gray-400">Última actualización: enero 2026 · Conforme a la LFPDPPP</p>
                   <h3 className="font-bold text-gray-800">Responsable del tratamiento</h3>
-                  <p>AMECREC A.C., con domicilio en Chihuahua, Chihuahua, México. Contacto de privacidad: contacto@alianzaindigo.org</p>
+                  <p>Lottero, con domicilio en Chihuahua, Chihuahua, México. Contacto de privacidad: contacto@alianzaindigo.org</p>
                   <h3 className="font-bold text-gray-800">Datos que recopilamos</h3>
                   <ul className="list-disc pl-4 space-y-1">
                     <li>Nombre completo y correo electrónico (registro)</li>
@@ -555,13 +549,13 @@ const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onExplore }) => {
               {modal === 'legal' && (
                 <div className="prose prose-sm max-w-none text-gray-600 space-y-4">
                   <h3 className="font-bold text-gray-800">Titular</h3>
-                  <p>AMECREC A.C. — Asociación Civil constituida conforme a las leyes de los Estados Unidos Mexicanos, con domicilio en Chihuahua, Chihuahua.</p>
+                  <p>Lottero — Asociación Civil constituida conforme a las leyes de los Estados Unidos Mexicanos, con domicilio en Chihuahua, Chihuahua.</p>
                   <h3 className="font-bold text-gray-800">Actividad regulada</h3>
-                  <p>Los sorteos vinculados a Lotería Nacional operan bajo la normativa de la Secretaría de Gobernación (SEGOB). AMECREC A.C. actúa exclusivamente como plataforma tecnológica intermediaria; la organización de cada sorteo es responsabilidad del organizador registrado.</p>
+                  <p>Los sorteos vinculados a Lotería Nacional operan bajo la normativa de la Secretaría de Gobernación (SEGOB). Lottero actúa exclusivamente como plataforma tecnológica intermediaria; la organización de cada sorteo es responsabilidad del organizador registrado.</p>
                   <h3 className="font-bold text-gray-800">Propiedad intelectual</h3>
-                  <p>Todos los elementos de la plataforma (diseño, código, marcas, logotipos) son propiedad de AMECREC A.C. o de sus licenciantes. Queda prohibida su reproducción sin autorización expresa por escrito.</p>
+                  <p>Todos los elementos de la plataforma (diseño, código, marcas, logotipos) son propiedad de Lottero o de sus licenciantes. Queda prohibida su reproducción sin autorización expresa por escrito.</p>
                   <h3 className="font-bold text-gray-800">Exclusión de garantías</h3>
-                  <p>La plataforma se ofrece "tal cual". AMECREC A.C. no garantiza la disponibilidad ininterrumpida del servicio ni se responsabiliza por pérdidas derivadas de fallas técnicas ajenas a su control.</p>
+                  <p>La plataforma se ofrece "tal cual". Lottero no garantiza la disponibilidad ininterrumpida del servicio ni se responsabiliza por pérdidas derivadas de fallas técnicas ajenas a su control.</p>
                   <h3 className="font-bold text-gray-800">Contacto legal</h3>
                   <p>contacto@alianzaindigo.org</p>
                 </div>

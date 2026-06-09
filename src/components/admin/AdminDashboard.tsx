@@ -435,7 +435,7 @@ const AdminDashboard: React.FC = () => {
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-gray-900">Panel de Administración</h1>
-          <p className="text-gray-500 mt-1">Gestión global de Sorteos AMECREC</p>
+          <p className="text-gray-500 mt-1">Gestión global de Lottero</p>
         </div>
 
         {/* Tabs */}

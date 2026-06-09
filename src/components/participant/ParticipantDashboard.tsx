@@ -273,7 +273,7 @@ const ParticipantDashboard: React.FC<ParticipantDashboardProps> = ({ onNavigate 
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-gray-900">Mi Panel</h1>
-          <p className="text-gray-500 mt-1">Gestiona tus boletos y revisa resultados — Sorteos AMECREC</p>
+          <p className="text-gray-500 mt-1">Gestiona tus boletos y revisa resultados — Lottero</p>
         </div>
 
         {/* Metrics */}

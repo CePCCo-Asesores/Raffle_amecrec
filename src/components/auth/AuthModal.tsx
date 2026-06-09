@@ -62,13 +62,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, defaultTab = 'lo
             <X className="w-5 h-5" />
           </button>
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
-              <Shield className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h2 className="text-xl font-bold text-white">Sorteos AMECREC</h2>
-              <p className="text-blue-200 text-sm">Plataforma de Sorteos Digitales</p>
-            </div>
+            <img src="/logo.png" alt="Lottero" className="h-12 w-auto object-contain" />
           </div>
           <div className="flex bg-white/10 rounded-lg p-1">
             <button onClick={() => setTab('login')}

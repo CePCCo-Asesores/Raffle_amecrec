@@ -93,16 +93,8 @@ const Navbar: React.FC<NavbarProps> = ({
         <div className="flex justify-between h-16">
           {/* Logo */}
           <div className="flex items-center gap-8">
-            <button onClick={() => onNavigate(isAuthenticated ? getDashboardView() : 'landing')} className="flex items-center gap-2.5 group">
-              <div className="w-9 h-9 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl flex items-center justify-center shadow-md group-hover:shadow-lg transition-shadow">
-                <Trophy className="w-5 h-5 text-white" />
-              </div>
-              <div className="hidden sm:flex flex-col leading-none">
-                <span className="text-sm font-extrabold bg-gradient-to-r from-blue-900 to-indigo-800 bg-clip-text text-transparent">
-                  Sorteos AMECREC
-                </span>
-                <span className="text-[9px] text-gray-400 font-medium tracking-wider">PLATAFORMA DE RIFAS</span>
-              </div>
+            <button onClick={() => onNavigate(isAuthenticated ? getDashboardView() : 'landing')} className="flex items-center group">
+              <img src="/logo.png" alt="Lottero" className="h-10 w-auto object-contain" />
             </button>
 
             {/* Desktop Nav Links */}

@@ -61,7 +61,7 @@ async function sendEmail(params: {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      from:    Deno.env.get("EMAIL_FROM") || "RifaMax <noreply@rifamax.mx>",
+      from:    Deno.env.get("EMAIL_FROM") || "Lottero <noreply@lottero.mx>",
       to:      [params.to],
       subject: params.subject,
       html:    params.html,
@@ -96,7 +96,7 @@ function templateTicketPurchase(data: {
   const tickets = data.ticketNumbers.join(", ");
   return `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <h2 style="color: #7c3aed;">✅ ¡Compra exitosa en RifaMax!</h2>
+      <h2 style="color: #7c3aed;">✅ ¡Compra exitosa en Lottero!</h2>
       <p>Hola <strong>${data.userName}</strong>,</p>
       <p>Tu compra de boletos para <strong>${data.raffleName}</strong> fue registrada correctamente.</p>
       <div style="background: #f3f4f6; padding: 16px; border-radius: 8px; margin: 16px 0;">
@@ -108,7 +108,7 @@ function templateTicketPurchase(data: {
         <p style="color: #d97706;">⚠️ Tu pago está pendiente de confirmación por el organizador. Recibirás una notificación cuando se confirme.</p>
       ` : ""}
       <p>¡Buena suerte en el sorteo!</p>
-      <p style="color: #6b7280; font-size: 12px;">RifaMax — Plataforma de rifas benéficas</p>
+      <p style="color: #6b7280; font-size: 12px;">Lottero — Plataforma de rifas benéficas</p>
     </div>
   `;
 }
@@ -131,7 +131,7 @@ function templateWinnerDeclared(data: {
           <p><strong>Hash de verificación:</strong> <code>${data.resultHash}</code></p>
           <p style="font-size: 12px; color: #6b7280;">Puedes usar este hash para verificar la autenticidad del resultado.</p>
         </div>
-        <p style="color: #6b7280; font-size: 12px;">RifaMax — Plataforma de rifas benéficas</p>
+        <p style="color: #6b7280; font-size: 12px;">Lottero — Plataforma de rifas benéficas</p>
       </div>
     `;
   }
@@ -145,7 +145,7 @@ function templateWinnerDeclared(data: {
         <p><strong>Hash de verificación:</strong> <code>${data.resultHash}</code></p>
       </div>
       <p>¡Gracias por participar! Te esperamos en la próxima rifa.</p>
-      <p style="color: #6b7280; font-size: 12px;">RifaMax — Plataforma de rifas benéficas</p>
+      <p style="color: #6b7280; font-size: 12px;">Lottero — Plataforma de rifas benéficas</p>
     </div>
   `;
 }
@@ -158,7 +158,7 @@ function templateRaffleClosed(data: { userName: string; raffleName: string; draw
       <p>La venta de boletos para <strong>${data.raffleName}</strong> ha cerrado.</p>
       <p>El sorteo está programado para: <strong>${new Date(data.drawDate).toLocaleDateString("es-MX", { dateStyle: "full" })}</strong></p>
       <p>Te notificaremos en cuanto se declare el ganador. ¡Mucha suerte!</p>
-      <p style="color: #6b7280; font-size: 12px;">RifaMax — Plataforma de rifas benéficas</p>
+      <p style="color: #6b7280; font-size: 12px;">Lottero — Plataforma de rifas benéficas</p>
     </div>
   `;
 }
