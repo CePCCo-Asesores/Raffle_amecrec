@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { logger } from './logger';
 import { StripeConnectStatus } from './types';
 
 // ============================================================
@@ -25,7 +26,7 @@ export async function createCheckoutSession(params: {
     });
 
     if (error) {
-      console.error('Checkout session error:', error);
+      logger.error('Checkout session error:', error);
       return { error: error.message || 'Error al crear sesión de pago' };
     }
 
@@ -38,7 +39,7 @@ export async function createCheckoutSession(params: {
       url: data.url,
     };
   } catch (err: any) {
-    console.error('Checkout exception:', err);
+    logger.error('Checkout exception:', err);
     return { error: err.message || 'Error inesperado al crear sesión de pago' };
   }
 }
@@ -58,7 +59,7 @@ export async function createConnectAccount(): Promise<{ connectId?: string; onbo
     });
 
     if (error) {
-      console.error('Connect account error:', error);
+      logger.error('Connect account error:', error);
       return { error: error.message || 'Error al crear cuenta Connect' };
     }
 
@@ -71,7 +72,7 @@ export async function createConnectAccount(): Promise<{ connectId?: string; onbo
       onboardingUrl: data.onboarding_url,
     };
   } catch (err: any) {
-    console.error('Connect exception:', err);
+    logger.error('Connect exception:', err);
     return { error: err.message || 'Error inesperado' };
   }
 }
@@ -102,7 +103,7 @@ export async function checkConnectStatus(): Promise<StripeConnectStatus> {
       details_submitted: data.details_submitted,
     };
   } catch (err) {
-    console.error('Connect status check error:', err);
+    logger.error('Connect status check error:', err);
     return {
       connected: false,
       status: 'not_connected',

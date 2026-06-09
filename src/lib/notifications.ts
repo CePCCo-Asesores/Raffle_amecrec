@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { logger } from './logger';
 import { NotificationPreferences, EmailLog } from './types';
 
 // ============================================================
@@ -20,13 +21,13 @@ export async function getNotificationPreferences(): Promise<NotificationPreferen
     });
 
     if (error || data?.error) {
-      console.error('Get preferences error:', error || data?.error);
+      logger.error('Get preferences error:', error || data?.error);
       return DEFAULT_PREFERENCES;
     }
 
     return data.preferences || DEFAULT_PREFERENCES;
   } catch (err) {
-    console.error('Get preferences exception:', err);
+    logger.error('Get preferences exception:', err);
     return DEFAULT_PREFERENCES;
   }
 }
@@ -72,7 +73,7 @@ export async function getEmailLog(): Promise<EmailLog[]> {
 
     return data.logs || [];
   } catch (err) {
-    console.error('Get email log error:', err);
+    logger.error('Get email log error:', err);
     return [];
   }
 }
@@ -100,7 +101,7 @@ export async function sendTicketPurchaseNotification(params: {
       },
     });
   } catch (err) {
-    console.error('Failed to send purchase notification:', err);
+    logger.error('Failed to send purchase notification:', err);
     // Non-blocking - don't throw
   }
 }
@@ -114,7 +115,7 @@ export async function sendRaffleClosedNotification(raffleId: string): Promise<vo
       },
     });
   } catch (err) {
-    console.error('Failed to send raffle closed notification:', err);
+    logger.error('Failed to send raffle closed notification:', err);
   }
 }
 
@@ -133,7 +134,7 @@ export async function sendWinnerDeclaredNotification(params: {
       },
     });
   } catch (err) {
-    console.error('Failed to send winner notification:', err);
+    logger.error('Failed to send winner notification:', err);
   }
 }
 
@@ -156,6 +157,6 @@ export async function sendSalesThresholdNotification(params: {
       },
     });
   } catch (err) {
-    console.error('Failed to send threshold notification:', err);
+    logger.error('Failed to send threshold notification:', err);
   }
 }

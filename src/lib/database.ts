@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import { rateLimiter } from './rate-limiter';
 import { formatTicketNumber } from './utils';
+import { logger } from './logger';
 import {
   Raffle, Ticket, RaffleStatus, RAFFLE_STATUS_TRANSITIONS,
   RAFFLE_VALIDATION_RULES, AuditLog, FinancialLedger,
@@ -35,7 +36,7 @@ export async function createAuditLog(params: {
       created_at: new Date().toISOString(),
     });
   } catch (err) {
-    console.error('Audit log error:', err);
+    logger.error('Audit log error:', err);
     // Don't throw - audit logging should not block operations
   }
 }
@@ -73,7 +74,7 @@ export async function createLedgerEntry(params: {
       created_at: new Date().toISOString(),
     });
   } catch (err) {
-    console.error('Ledger entry error:', err);
+    logger.error('Ledger entry error:', err);
   }
 }
 
@@ -206,7 +207,7 @@ export async function atomicTicketPurchase(params: {
     });
 
     if (error) {
-      console.error('RPC atomic_purchase_tickets error:', error);
+      logger.error('RPC atomic_purchase_tickets error:', error);
       return { success: false, purchasedTickets: [], errors: ['Error al procesar la compra. Intenta de nuevo.'] };
     }
 
@@ -224,7 +225,7 @@ export async function atomicTicketPurchase(params: {
       errors,
     };
   } catch (err) {
-    console.error('Atomic purchase exception:', err);
+    logger.error('Atomic purchase exception:', err);
     return { success: false, purchasedTickets: [], errors: ['Error inesperado. Intenta de nuevo.'] };
   }
 }
@@ -248,7 +249,7 @@ export async function reserveTickets(params: {
     });
 
     if (error) {
-      console.error('RPC reserve_tickets error:', error);
+      logger.error('RPC reserve_tickets error:', error);
       return { reserved: [], failed: params.ticketNumbers, error: 'No se pudieron reservar los boletos. Intenta de nuevo.' };
     }
 
@@ -259,7 +260,7 @@ export async function reserveTickets(params: {
       expiresAt: result?.expires_at,
     };
   } catch (err) {
-    console.error('Reserve tickets exception:', err);
+    logger.error('Reserve tickets exception:', err);
     return { reserved: [], failed: params.ticketNumbers, error: 'Error inesperado al reservar.' };
   }
 }
@@ -276,7 +277,7 @@ export async function releaseTickets(params: {
       p_ticket_numbers: params.ticketNumbers,
     });
   } catch (err) {
-    console.error('Release tickets error:', err);
+    logger.error('Release tickets error:', err);
   }
 }
 
@@ -307,13 +308,13 @@ export async function buyTicket(params: {
     });
 
     if (error) {
-      console.error('RPC buy_ticket error:', error);
+      logger.error('RPC buy_ticket error:', error);
       return { success: false };
     }
 
     return { success: (data as any)?.success === true };
   } catch (err) {
-    console.error('buy_ticket exception:', err);
+    logger.error('buy_ticket exception:', err);
     return { success: false };
   }
 }
@@ -488,8 +489,8 @@ export async function transitionRaffleStatus(params: {
   }
 
   try {
-    console.log(`[transitionRaffleStatus] Updating raffle ${raffle.id} from "${raffle.status}" to "${targetStatus}"...`);
-    
+    logger.log(`[transitionRaffleStatus] Updating raffle ${raffle.id} from "${raffle.status}" to "${targetStatus}"...`);
+
     const { data, error } = await supabase
       .from('raffles')
       .update(updateData)
@@ -498,10 +499,9 @@ export async function transitionRaffleStatus(params: {
       .single();
 
     if (error) {
-      console.error('[transitionRaffleStatus] Database error:', error);
-      
-      // Parse common database trigger errors
-      let userMessage = error.message;
+      logger.error('[transitionRaffleStatus] Database error:', error);
+
+      let userMessage = 'Ocurrió un error al actualizar el sorteo. Intenta de nuevo.';
       if (error.message.includes('enforce_raffle_state_machine')) {
         userMessage = 'El trigger de la base de datos rechazó la transición. Verifica que el sorteo tenga toda la información requerida.';
       }
@@ -514,16 +514,16 @@ export async function transitionRaffleStatus(params: {
       if (error.code === 'PGRST116') {
         userMessage = 'No se encontró el sorteo. Puede haber sido eliminado.';
       }
-      
-      return { success: false, errors: [userMessage, `(Detalle técnico: ${error.message})`] };
+
+      return { success: false, errors: [userMessage] };
     }
 
     if (!data) {
-      console.error('[transitionRaffleStatus] No data returned after update');
+      logger.error('[transitionRaffleStatus] No data returned after update');
       return { success: false, errors: ['La actualización no retornó datos. El sorteo puede no existir o no tienes permisos.'] };
     }
 
-    console.log(`[transitionRaffleStatus] Success! Raffle ${raffle.id} is now "${targetStatus}"`);
+    logger.log(`[transitionRaffleStatus] Success! Raffle ${raffle.id} is now "${targetStatus}"`);
 
     // Audit log
     await createAuditLog({
@@ -539,10 +539,10 @@ export async function transitionRaffleStatus(params: {
 
     return { success: true, errors: [] };
   } catch (err: any) {
-    console.error('[transitionRaffleStatus] Exception:', err);
-    return { 
-      success: false, 
-      errors: [`Error inesperado: ${err?.message || 'desconocido'}. Intenta de nuevo o contacta soporte.`] 
+    logger.error('[transitionRaffleStatus] Exception:', err);
+    return {
+      success: false,
+      errors: ['Error inesperado. Intenta de nuevo o contacta soporte.'],
     };
   }
 }
