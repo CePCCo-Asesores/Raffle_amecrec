@@ -225,12 +225,12 @@ async function handleApproveRefund(userId: string, body: {
     payment_method: null,
   }).eq("id", refund.ticket_id);
 
-  // Actualizar contadores de la rifa
-  await supabase.from("raffles").update({
-    tickets_sold: supabase.rpc("greatest", { a: 0, b: -1 }), // decrement safely
-    revenue:      supabase.rpc("greatest", { a: 0, b: -refund.amount }),
-    updated_at:   new Date().toISOString(),
-  }).eq("id", refund.raffle_id);
+  // Actualizar contadores de la rifa de forma atómica
+  await supabase.rpc("decrement_raffle_counters", {
+    p_raffle_id:      refund.raffle_id,
+    p_ticket_count:   1,
+    p_revenue_amount: refund.amount,
+  });
 
   // Notificar al participante
   await supabase.from("notifications").insert({
