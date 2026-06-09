@@ -111,7 +111,7 @@ export interface Raffle {
   result_locked_by?: string;
 }
 
-export type TicketStatus = 'available' | 'reserved' | 'sold' | 'paid';
+export type TicketStatus = 'available' | 'reserved' | 'sold' | 'paid' | 'pending_payment';
 
 export interface Ticket {
   id: string;

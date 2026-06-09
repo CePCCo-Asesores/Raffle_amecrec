@@ -16,4 +16,15 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  test: {
+    globals: true,
+    environment: "jsdom",
+    setupFiles: ["./src/test/setup.ts"],
+    css: false,
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "lcov"],
+      exclude: ["src/components/ui/**", "src/test/**"],
+    },
+  },
 }));
