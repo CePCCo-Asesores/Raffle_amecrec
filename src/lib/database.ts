@@ -79,75 +79,10 @@ export async function createLedgerEntry(params: {
 
 // ============================================================
 // RAFFLE RESULT LOG (Immutability)
+// El hash SHA-256 y el registro inmutable se generan únicamente
+// en la BD via finalize_draw RPC (migración 004).
+// No existe lógica de hash en el cliente.
 // ============================================================
-
-function generateResultHash(data: {
-  raffleId: string;
-  winningNumber: number;
-  lotteryType: string;
-  lotteryDrawNumber: string;
-  registeredBy: string;
-  timestamp: string;
-}): string {
-  // Simple hash for tamper detection (in production, use crypto.subtle)
-  const str = JSON.stringify(data);
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash; // Convert to 32bit integer
-  }
-  return Math.abs(hash).toString(16).padStart(8, '0') + '-' + Date.now().toString(16);
-}
-
-export async function createResultLog(params: {
-  raffleId: string;
-  winningNumber: number;
-  lotteryType: string;
-  lotteryDrawNumber: string;
-  lotteryDrawDate: string;
-  registeredBy: string;
-  evidenceUrl?: string;
-  previousResultId?: string;
-  changeReason?: string;
-}): Promise<{ success: boolean; resultId?: string; error?: string }> {
-  const timestamp = new Date().toISOString();
-  const resultHash = generateResultHash({
-    raffleId: params.raffleId,
-    winningNumber: params.winningNumber,
-    lotteryType: params.lotteryType,
-    lotteryDrawNumber: params.lotteryDrawNumber,
-    registeredBy: params.registeredBy,
-    timestamp,
-  });
-
-  try {
-    const { data, error } = await supabase.from('raffle_results_log').insert({
-      raffle_id: params.raffleId,
-      winning_number: params.winningNumber,
-      lottery_type: params.lotteryType,
-      lottery_draw_number: params.lotteryDrawNumber,
-      lottery_draw_date: params.lotteryDrawDate,
-      registered_by: params.registeredBy,
-      registered_at: timestamp,
-      result_hash: resultHash,
-      evidence_url: params.evidenceUrl,
-      is_official: true,
-      previous_result_id: params.previousResultId,
-      change_reason: params.changeReason,
-    }).select().single();
-
-    if (error) {
-      console.error('Result log error:', error);
-      return { success: false, error: error.message };
-    }
-
-    return { success: true, resultId: data?.id };
-  } catch (err) {
-    console.error('Result log exception:', err);
-    return { success: false, error: 'Error al registrar resultado' };
-  }
-}
 
 // ============================================================
 // RAFFLE STATE MACHINE
@@ -272,15 +207,13 @@ export async function atomicTicketPurchase(params: {
 
     if (error) {
       console.error('RPC atomic_purchase_tickets error:', error);
-      // Fallback to client-side optimistic approach if RPC not available
-      return await fallbackClientPurchase(params);
+      return { success: false, purchasedTickets: [], errors: ['Error al procesar la compra. Intenta de nuevo.'] };
     }
 
     const result = data as any;
     const purchased = (result?.purchased || []) as number[];
     const errors = (result?.errors || []) as string[];
 
-    // Record rate limit on client side too
     if (purchased.length > 0) {
       rateLimiter.recordPurchase(userId, purchased.length);
     }
@@ -291,76 +224,9 @@ export async function atomicTicketPurchase(params: {
       errors,
     };
   } catch (err) {
-    console.error('Atomic purchase exception, using fallback:', err);
-    return await fallbackClientPurchase(params);
+    console.error('Atomic purchase exception:', err);
+    return { success: false, purchasedTickets: [], errors: ['Error inesperado. Intenta de nuevo.'] };
   }
-}
-// Fallback: client-side optimistic concurrency (if RPC is unavailable)
-async function fallbackClientPurchase(params: {
-  userId: string;
-  userEmail: string;
-  raffleId: string;
-  ticketNumbers: number[];
-  paymentMethod: string;
-  commissionRate: number;
-  pricePerTicket: number;
-}): Promise<{ success: boolean; purchasedTickets: number[]; errors: string[] }> {
-  const { userId, userEmail, raffleId, ticketNumbers, paymentMethod, commissionRate, pricePerTicket } = params;
-  const errors: string[] = [];
-  const purchasedTickets: number[] = [];
-  const now = new Date().toISOString();
-
-  for (const ticketNum of ticketNumbers) {
-    try {
-      // Accept available tickets OR tickets reserved by this user OR expired reservations
-      const { data, error } = await supabase
-        .from('tickets')
-        .update({
-          participant_id: userId,
-          status: 'sold' as const,
-          purchased_at: now,
-          payment_method: paymentMethod,
-          commission_rate: commissionRate,
-          commission_amount: pricePerTicket * (commissionRate / 100),
-          reserved_by: null,
-          reserved_until: null,
-        })
-        .eq('raffle_id', raffleId)
-        .eq('ticket_number', ticketNum)
-        .or(`status.eq.available,and(status.eq.reserved,reserved_by.eq.${userId})`)
-        .select()
-        .single();
-
-      if (error || !data) {
-        errors.push(`Boleto #${ticketNum} ya no está disponible`);
-        continue;
-      }
-
-      purchasedTickets.push(ticketNum);
-
-      const commissionAmount = pricePerTicket * (commissionRate / 100);
-      const organizerAmount = pricePerTicket - commissionAmount;
-
-      await createLedgerEntry({ entryType: 'ticket_sale', amount: pricePerTicket, description: `Venta boleto #${ticketNum}`, raffleId, ticketId: data.id, payerId: userId, commissionRateApplied: commissionRate, commissionAmountCalculated: commissionAmount });
-      if (commissionAmount > 0) {
-        await createLedgerEntry({ entryType: 'platform_commission', amount: commissionAmount, description: `Comisión ${commissionRate}%`, raffleId, ticketId: data.id, payerId: userId, commissionRateApplied: commissionRate, commissionAmountCalculated: commissionAmount });
-      }
-      await createLedgerEntry({ entryType: 'organizer_income', amount: organizerAmount, description: `Ingreso organizador boleto #${ticketNum}`, raffleId, ticketId: data.id, payerId: userId });
-    } catch (err) {
-      errors.push(`Error boleto #${ticketNum}`);
-    }
-  }
-
-  if (purchasedTickets.length > 0) {
-    const { data: currentRaffle } = await supabase.from('raffles').select('tickets_sold, revenue').eq('id', raffleId).single();
-    if (currentRaffle) {
-      await supabase.from('raffles').update({ tickets_sold: currentRaffle.tickets_sold + purchasedTickets.length, revenue: currentRaffle.revenue + (purchasedTickets.length * pricePerTicket), updated_at: now }).eq('id', raffleId);
-    }
-    rateLimiter.recordPurchase(userId, purchasedTickets.length);
-    await createAuditLog({ userId, userEmail, action: 'ticket_purchase', entityType: 'ticket', entityId: raffleId, newValue: { ticketNumbers: purchasedTickets, amount: purchasedTickets.length * pricePerTicket }, details: { raffleId, paymentMethod, commissionRate } });
-  }
-
-  return { success: purchasedTickets.length > 0, purchasedTickets, errors };
 }
 
 // ============================================================
@@ -383,8 +249,7 @@ export async function reserveTickets(params: {
 
     if (error) {
       console.error('RPC reserve_tickets error:', error);
-      // Fallback: just return success without DB reservation (client-only selection)
-      return { reserved: params.ticketNumbers, failed: [] };
+      return { reserved: [], failed: params.ticketNumbers, error: 'No se pudieron reservar los boletos. Intenta de nuevo.' };
     }
 
     const result = data as any;
@@ -395,7 +260,7 @@ export async function reserveTickets(params: {
     };
   } catch (err) {
     console.error('Reserve tickets exception:', err);
-    return { reserved: params.ticketNumbers, failed: [] };
+    return { reserved: [], failed: params.ticketNumbers, error: 'Error inesperado al reservar.' };
   }
 }
 
@@ -722,63 +587,14 @@ export async function declareWinner(params: {
     return { success: false, errors };
   }
 
-  const now = new Date().toISOString();
+  // Delegar al RPC seguro: genera hash SHA-256 en BD, registra en log
+  // inmutable y actualiza la rifa de forma atómica.
+  const result = await finalizeDrawAtomic({ raffleId: raffle.id, userId, winningNumber, evidenceUrl });
 
-  // 1. Create immutable result log
-  const resultLog = await createResultLog({
-    raffleId: raffle.id,
-    winningNumber,
-    lotteryType: raffle.lottery_type || '',
-    lotteryDrawNumber: raffle.lottery_draw_number || '',
-    lotteryDrawDate: raffle.lottery_draw_date || '',
-    registeredBy: userId,
-    evidenceUrl,
-  });
-
-  if (!resultLog.success) {
-    errors.push(resultLog.error || 'Error al registrar resultado');
+  if (!result.success) {
+    errors.push(result.error || 'Error al declarar ganador');
     return { success: false, errors };
   }
-
-  // 2. Update raffle with winner
-  const { error } = await supabase
-    .from('raffles')
-    .update({
-      winning_number: winningNumber,
-      status: 'winner_declared',
-      winner_declared_at: now,
-      winner_evidence_url: evidenceUrl,
-      result_locked: true,
-      result_locked_at: now,
-      result_locked_by: userId,
-      updated_at: now,
-    })
-    .eq('id', raffle.id);
-
-  if (error) {
-    errors.push(error.message);
-    return { success: false, errors };
-  }
-
-  // 3. Audit log
-  await createAuditLog({
-    userId,
-    userEmail,
-    action: 'winner_declared',
-    entityType: 'raffle',
-    entityId: raffle.id,
-    newValue: {
-      winningNumber,
-      resultLogId: resultLog.resultId,
-      evidenceUrl,
-    },
-    details: {
-      raffleName: raffle.name,
-      lotteryType: raffle.lottery_type,
-      lotteryDrawNumber: raffle.lottery_draw_number,
-      resultHash: resultLog.resultId,
-    },
-  });
 
   return { success: true, errors: [] };
 }
