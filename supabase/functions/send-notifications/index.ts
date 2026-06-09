@@ -61,7 +61,7 @@ async function sendEmail(params: {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      from:    Deno.env.get("EMAIL_FROM") || "Lottero <noreply@lottero.mx>",
+      from:    Deno.env.get("EMAIL_FROM") || "Lottero <noreply@lottero.online>",
       to:      [params.to],
       subject: params.subject,
       html:    params.html,

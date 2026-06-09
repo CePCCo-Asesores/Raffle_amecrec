@@ -447,14 +447,14 @@ const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onExplore }) => {
                 <div className="space-y-4">
                   <p className="text-gray-600 text-sm">¿Tienes dudas o necesitas ayuda? Contáctanos por cualquiera de estos medios.</p>
                   <div className="space-y-3">
-                    <a href="mailto:contacto@alianzaindigo.org"
+                    <a href="mailto:contacto@lottero.online"
                       className="flex items-center gap-3 p-3 rounded-xl border border-gray-200 hover:border-blue-400 hover:bg-blue-50 transition-all group">
                       <div className="w-9 h-9 bg-blue-100 rounded-lg flex items-center justify-center group-hover:bg-blue-200">
                         <Mail className="w-4 h-4 text-blue-600" />
                       </div>
                       <div>
                         <div className="text-sm font-medium text-gray-900">Correo electrónico</div>
-                        <div className="text-xs text-gray-500">contacto@alianzaindigo.org</div>
+                        <div className="text-xs text-gray-500">contacto@lottero.online</div>
                       </div>
                     </a>
                     <a href="https://wa.me/526572396866" target="_blank" rel="noopener noreferrer"
@@ -500,7 +500,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onExplore }) => {
                 <div className="prose prose-sm max-w-none text-gray-600 space-y-4">
                   <p className="text-xs text-gray-400">Última actualización: enero 2026 · Conforme a la LFPDPPP</p>
                   <h3 className="font-bold text-gray-800">Responsable del tratamiento</h3>
-                  <p>Lottero, con domicilio en Chihuahua, Chihuahua, México. Contacto de privacidad: contacto@alianzaindigo.org</p>
+                  <p>Lottero, con domicilio en Chihuahua, Chihuahua, México. Contacto de privacidad: contacto@lottero.online</p>
                   <h3 className="font-bold text-gray-800">Datos que recopilamos</h3>
                   <ul className="list-disc pl-4 space-y-1">
                     <li>Nombre completo y correo electrónico (registro)</li>
@@ -516,7 +516,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onExplore }) => {
                     <li>Cumplimiento de obligaciones fiscales y legales</li>
                   </ul>
                   <h3 className="font-bold text-gray-800">Derechos ARCO</h3>
-                  <p>Puede ejercer sus derechos de Acceso, Rectificación, Cancelación y Oposición enviando un correo a contacto@alianzaindigo.org con identificación oficial.</p>
+                  <p>Puede ejercer sus derechos de Acceso, Rectificación, Cancelación y Oposición enviando un correo a contacto@lottero.online con identificación oficial.</p>
                   <h3 className="font-bold text-gray-800">Transferencias</h3>
                   <p>Sus datos no se venden ni transfieren a terceros, excepto a Stripe Inc. para el procesamiento de pagos y a las autoridades competentes cuando la ley lo requiera.</p>
                 </div>
@@ -557,7 +557,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onExplore }) => {
                   <h3 className="font-bold text-gray-800">Exclusión de garantías</h3>
                   <p>La plataforma se ofrece "tal cual". Lottero no garantiza la disponibilidad ininterrumpida del servicio ni se responsabiliza por pérdidas derivadas de fallas técnicas ajenas a su control.</p>
                   <h3 className="font-bold text-gray-800">Contacto legal</h3>
-                  <p>contacto@alianzaindigo.org</p>
+                  <p>contacto@lottero.online</p>
                 </div>
               )}
 

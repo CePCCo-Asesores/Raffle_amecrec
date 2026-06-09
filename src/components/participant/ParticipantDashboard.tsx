@@ -962,7 +962,7 @@ const ParticipantDashboard: React.FC<ParticipantDashboardProps> = ({ onNavigate 
                       <span className="text-amber-500 text-base flex-shrink-0">⚠️</span>
                       <div className="text-xs text-amber-800">
                         <p className="font-semibold mb-0.5">El organizador aún no ha registrado sus datos bancarios.</p>
-                        <p>Contáctalo directamente para coordinar el pago: <a href="mailto:contacto@alianzaindigo.org" className="underline">contacto@alianzaindigo.org</a></p>
+                        <p>Contáctalo directamente para coordinar el pago: <a href="mailto:contacto@lottero.online" className="underline">contacto@lottero.online</a></p>
                       </div>
                     </div>
                   )}
