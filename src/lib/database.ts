@@ -437,7 +437,7 @@ export async function finalizeDrawAtomic(params: {
         'RAFFLE_NOT_FOUND': 'Rifa no encontrada.',
         'INVALID_STATUS': `La rifa debe estar en estado "Bloqueada". Estado actual: ${res?.current_status || ''}`,
         'WINNER_ALREADY_DECLARED': 'Esta rifa ya tiene un ganador declarado. El resultado es inmutable.',
-        'INVALID_NUMBER': `El número debe estar entre 0 y ${res?.max ?? '?'} (numeración desde cero)`,
+        'INVALID_NUMBER': `El número ganador debe estar entre 1 y ${res?.max ?? '?'}.`,
       };
       return { success: false, error: messages[errCode] || errCode };
     }
@@ -574,9 +574,8 @@ export async function declareWinner(params: {
     errors.push('Esta rifa ya tiene un ganador declarado. El resultado es inmutable.');
     return { success: false, errors };
   }
-  // Validate number range: 0-based (0 to total_tickets - 1)
-  if (winningNumber < 0 || winningNumber > raffle.total_tickets - 1) {
-    errors.push(`El número debe estar entre 0 y ${raffle.total_tickets - 1} (numeración desde cero)`);
+  if (winningNumber < 1 || winningNumber > raffle.total_tickets) {
+    errors.push(`El número ganador debe estar entre 1 y ${raffle.total_tickets}.`);
     return { success: false, errors };
   }
 
