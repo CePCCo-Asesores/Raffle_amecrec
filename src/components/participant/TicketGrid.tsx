@@ -18,7 +18,7 @@ import { toast } from '@/components/ui/use-toast';
 // ─── tipos locales ────────────────────────────────────────────────────────────
 interface TicketInfo {
   id: string;
-  status: 'available' | 'reserved' | 'sold' | 'paid';
+  status: 'available' | 'reserved' | 'sold' | 'paid' | 'pending_payment';
   reserved_by?: string | null;
   reserved_until?: string | null;
   participant_id?: string | null;
@@ -671,7 +671,7 @@ const TicketGrid: React.FC<TicketGridProps> = ({ raffle, onBack }) => {
           const VISIBLE = 5; // páginas visibles a cada lado del activo
           const half = Math.floor(VISIBLE / 2);
           let pageStart = Math.max(0, activeBlock - half);
-          let pageEnd   = Math.min(totalBlocks - 1, pageStart + VISIBLE - 1);
+          const pageEnd = Math.min(totalBlocks - 1, pageStart + VISIBLE - 1);
           if (pageEnd - pageStart < VISIBLE - 1) pageStart = Math.max(0, pageEnd - VISIBLE + 1);
           const pages: (number | '...')[] = [];
           if (pageStart > 0) { pages.push(0); if (pageStart > 1) pages.push('...'); }
